@@ -1,5 +1,6 @@
 # ProxiedHosts
 
+[![build](https://github.com/StevenJDH/ProxiedHosts/actions/workflows/dotnet-build-workflow.yml/badge.svg)](https://github.com/StevenJDH/ProxiedHosts/actions/workflows/dotnet-build-workflow.yml)
 ![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/StevenJDH/ProxiedHosts?include_prereleases)
 ![Maintenance](https://img.shields.io/badge/yes-4FCA21?label=maintained&style=flat)
 ![GitHub](https://img.shields.io/github/license/StevenJDH/ProxiedHosts)
