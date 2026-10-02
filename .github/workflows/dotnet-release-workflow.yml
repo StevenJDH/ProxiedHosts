@@ -7,12 +7,15 @@ on:
         description: 'Version, e.g. 1.0.0.26101'
         required: true
         type: string
-
       prerelease:
         description: 'Mark this release as a prerelease'
         required: true
         default: false
         type: boolean
+      release_notes:
+        description: 'Optional release notes (Markdown). Leave blank to auto-generate.'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -390,8 +393,35 @@ jobs:
             exit 1
           fi
 
-      - name: Create prerelease
-        if: inputs.prerelease
+      - name: Prepare release notes
+        id: release_notes
+        shell: bash
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          if [[ -n "${RELEASE_NOTES//[[:space:]]/}" ]]; then
+            printf '%s\n' "$RELEASE_NOTES" > release-notes.md
+            echo "provided=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "provided=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create prerelease with custom notes
+        if: inputs.prerelease && steps.release_notes.outputs.provided == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --target "${GITHUB_SHA}" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            --prerelease \
+            --latest=false
+
+      - name: Create prerelease with generated notes
+        if: inputs.prerelease && steps.release_notes.outputs.provided != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -404,8 +434,21 @@ jobs:
             --prerelease \
             --latest=false
 
-      - name: Create stable release
-        if: ${{ !inputs.prerelease }}
+      - name: Create stable release with custom notes
+        if: ${{ !inputs.prerelease && steps.release_notes.outputs.provided == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --target "${GITHUB_SHA}" \
+            --title "$TAG" \
+            --notes-file release-notes.md \
+            --latest
+
+      - name: Create stable release with generated notes
+        if: ${{ !inputs.prerelease && steps.release_notes.outputs.provided != 'true' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
