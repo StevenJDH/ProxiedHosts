@@ -1,0 +1,74 @@
+name: build
+
+on:
+  push:
+    branches:
+    - main
+    paths-ignore:
+    - '*.md'
+    - '*.png'
+  pull_request:
+    branches:
+    - main
+    paths-ignore:
+    - '*.md'
+    - '*.png'
+    types: [opened, synchronize, reopened] # https://docs.github.com/en/free-pro-team@latest/actions/reference/events-that-trigger-workflows#pull_request
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'The reason for running the workflow.'
+        required: true
+        default: 'Manual run'
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  SOLUTION_FILE: ProxiedHosts.sln
+
+jobs:
+  build:
+    name: Build - ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: Linux
+            os: ubuntu-latest
+          - name: macOS
+            os: macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Disabling shallow clone is recommended for improving relevancy.
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # Opted to use this instead of cache=true in setup-dotnet for simpler setup.
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget
+
+      - name: Restore
+        run: dotnet restore "${{ env.SOLUTION_FILE }}"
+
+      - name: Build
+        run: >
+          dotnet build "${{ env.SOLUTION_FILE }}"
+          --configuration Debug
+          --no-restore
