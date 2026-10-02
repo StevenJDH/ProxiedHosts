@@ -36,6 +36,9 @@ Port       : 28741 (stable and persisted)
 
 Configure the client application to use that address for both HTTP and HTTPS proxying.
 
+> [!TIP]
+> For Linux and macOS, run `chmod +x proxiedhosts` to set the execution bit so that `./proxiedhosts` works for running the application. Also, macOS users will likely need to run `xattr -d com.apple.quarantine proxiedhosts` to remove the quarantine attribute so that it doesn't get block by Gatekeeper. Alternatively, the execution can be approved by going to `System Settings > Privacy & Security`.
+
 ## `proxiedhosts.txt`
 
 Format is similar to the operating-system hosts file:
