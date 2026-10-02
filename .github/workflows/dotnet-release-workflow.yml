@@ -1,0 +1,418 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, e.g. 1.0.0.26101'
+        required: true
+        type: string
+
+      prerelease:
+        description: 'Mark this release as a prerelease'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  PROJECT_FILE: ProxiedHosts/ProxiedHosts.csproj
+  APP_NAME: proxiedhosts
+
+jobs:
+
+  # ------------------------------------------------------------
+  # Validate and normalize the requested version.
+  # ------------------------------------------------------------
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      package_version: ${{ steps.version.outputs.package_version }}
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Validate version
+        id: version
+        shell: bash
+        run: |
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+
+          if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Invalid version '$VERSION'. Expected format such as 1.0.0.26101."
+            exit 1
+          fi
+
+          MAJOR="${BASH_REMATCH[1]}"
+          MINOR="${BASH_REMATCH[2]}"
+          PATCH="${BASH_REMATCH[3]}"
+
+          PACKAGE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "Release version: $VERSION"
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Assembly/File version: $VERSION"
+          echo "Tag: $VERSION"
+
+  # ------------------------------------------------------------
+  # Windows + Linux
+  #
+  # Native runners are used for each CPU architecture.
+  # ------------------------------------------------------------
+  publish:
+    name: AOT - ${{ matrix.rid }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            runner: windows-latest
+            os: windows
+          - rid: win-arm64
+            runner: windows-11-arm
+            os: windows
+          - rid: linux-x64
+            runner: ubuntu-24.04
+            os: linux
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+            os: linux
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # Opted to use this instead of cache=true in setup-dotnet for simpler setup.
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget
+
+      # Native AOT on Linux requires the native compiler toolchain.
+      - name: Install Linux Native AOT prerequisites
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish Native AOT
+        run: >
+          dotnet publish "${{ env.PROJECT_FILE }}"
+          --configuration Release
+          --runtime "${{ matrix.rid }}"
+          --self-contained true
+          -p:PublishAot=true
+          -p:Version="${{ needs.prepare.outputs.package_version }}"
+          -p:AssemblyVersion="${{ needs.prepare.outputs.version }}"
+          -p:FileVersion="${{ needs.prepare.outputs.version }}"
+          -o "publish/${{ matrix.rid }}"
+
+      # ----------------------------------------------------------
+      # Windows package
+      # ----------------------------------------------------------
+      - name: Create Windows release package
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $bundle = "bundle"
+          New-Item -ItemType Directory -Force -Path $bundle | Out-Null
+
+          $exe = "publish/${{ matrix.rid }}/${{ env.APP_NAME }}.exe"
+
+          if (-not (Test-Path $exe)) {
+              throw "Expected executable was not produced: $exe"
+          }
+
+          Copy-Item $exe $bundle
+
+          $projectDirectory = Split-Path "${{ env.PROJECT_FILE }}"
+
+          if ([string]::IsNullOrWhiteSpace($projectDirectory)) {
+              $projectDirectory = "."
+          }
+
+          $hostsFile = Join-Path $projectDirectory "proxiedhosts.txt"
+
+          if (Test-Path $hostsFile) {
+              Copy-Item $hostsFile $bundle
+          }
+
+          if (Test-Path "README.md") {
+              Copy-Item "README.md" $bundle
+          }
+
+          if (Test-Path "LICENSE") {
+              Copy-Item "LICENSE" $bundle
+          }
+
+          $releaseDir = "release-assets"
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+
+          $archive = Join-Path `
+              $releaseDir `
+              "proxiedhosts-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.zip"
+
+          Compress-Archive `
+              -Path "$bundle/*" `
+              -DestinationPath $archive
+
+      # ----------------------------------------------------------
+      # Linux package
+      # ----------------------------------------------------------
+      - name: Create Linux release package
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p bundle release-assets
+
+          BINARY="publish/${{ matrix.rid }}/${APP_NAME}"
+
+          if [[ ! -f "$BINARY" ]]; then
+            echo "::error::Expected executable was not produced: $BINARY"
+            exit 1
+          fi
+
+          cp "$BINARY" bundle/
+          chmod +x "bundle/${APP_NAME}"
+
+          PROJECT_DIRECTORY="$(dirname "${PROJECT_FILE}")"
+
+          if [[ -f "${PROJECT_DIRECTORY}/proxiedhosts.txt" ]]; then
+            cp "${PROJECT_DIRECTORY}/proxiedhosts.txt" bundle/
+          fi
+
+          [[ -f README.md ]] && cp README.md bundle/
+          [[ -f LICENSE ]] && cp LICENSE bundle/
+
+          tar \
+            -C bundle \
+            -czf "release-assets/proxiedhosts-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.tar.gz" \
+            .
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.rid }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ------------------------------------------------------------
+  # macOS Universal
+  #
+  # .NET publishes x64 and arm64 separately. Apple's lipo tool
+  # combines the two Mach-O executables into one universal binary.
+  # ------------------------------------------------------------
+  publish-macos:
+    name: AOT - macOS Universal
+    needs: prepare
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish macOS arm64
+        shell: bash
+        run: |
+          dotnet publish "${PROJECT_FILE}" \
+            --configuration Release \
+            --runtime osx-arm64 \
+            --self-contained true \
+            -p:PublishAot=true \
+            -p:Version="${{ needs.prepare.outputs.package_version }}" \
+            -p:AssemblyVersion="${{ needs.prepare.outputs.version }}" \
+            -p:FileVersion="${{ needs.prepare.outputs.version }}" \
+            -o publish/osx-arm64
+
+      - name: Publish macOS x64
+        shell: bash
+        run: |
+          dotnet publish "${PROJECT_FILE}" \
+            --configuration Release \
+            --runtime osx-x64 \
+            --self-contained true \
+            -p:PublishAot=true \
+            -p:Version="${{ needs.prepare.outputs.package_version }}" \
+            -p:AssemblyVersion="${{ needs.prepare.outputs.version }}" \
+            -p:FileVersion="${{ needs.prepare.outputs.version }}" \
+            -o publish/osx-x64
+
+      - name: Create universal macOS binary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARM_BINARY="publish/osx-arm64/${APP_NAME}"
+          X64_BINARY="publish/osx-x64/${APP_NAME}"
+
+          if [[ ! -f "$ARM_BINARY" ]]; then
+            echo "::error::Missing arm64 binary: $ARM_BINARY"
+            exit 1
+          fi
+
+          if [[ ! -f "$X64_BINARY" ]]; then
+            echo "::error::Missing x64 binary: $X64_BINARY"
+            exit 1
+          fi
+
+          mkdir -p publish/macos-universal
+
+          lipo \
+            -create \
+            "$ARM_BINARY" \
+            "$X64_BINARY" \
+            -output "publish/macos-universal/${APP_NAME}"
+
+          chmod +x "publish/macos-universal/${APP_NAME}"
+
+          # lipo changes the executable, so sign the merged binary again.
+          # This is ad-hoc signing, not Developer ID signing.
+          codesign \
+            --force \
+            --sign - \
+            "publish/macos-universal/${APP_NAME}"
+
+          echo
+          echo "Universal binary architectures:"
+          lipo -archs "publish/macos-universal/${APP_NAME}"
+
+      - name: Create macOS release package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p bundle release-assets
+
+          cp "publish/macos-universal/${APP_NAME}" bundle/
+          chmod +x "bundle/${APP_NAME}"
+
+          PROJECT_DIRECTORY="$(dirname "${PROJECT_FILE}")"
+
+          if [[ -f "${PROJECT_DIRECTORY}/proxiedhosts.txt" ]]; then
+            cp "${PROJECT_DIRECTORY}/proxiedhosts.txt" bundle/
+          fi
+
+          [[ -f README.md ]] && cp README.md bundle/
+          [[ -f LICENSE ]] && cp LICENSE bundle/
+
+          tar \
+            -C bundle \
+            -czf "release-assets/proxiedhosts-${{ needs.prepare.outputs.version }}-macos-universal.tar.gz" \
+            .
+
+      - name: Upload macOS release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-macos-universal
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ------------------------------------------------------------
+  # GitHub Release
+  #
+  # This only runs after every Native AOT build has completed.
+  # ------------------------------------------------------------
+  release:
+    name: Create GitHub Release
+
+    needs:
+      - prepare
+      - publish
+      - publish-macos
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download release packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Display release packages
+        shell: bash
+        run: |
+          ls -lah dist
+
+      - name: Create SHA256 checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum proxiedhosts-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Ensure release does not already exist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG already exists."
+            exit 1
+          fi
+
+      - name: Create prerelease
+        if: inputs.prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --target "${GITHUB_SHA}" \
+            --title "$TAG" \
+            --generate-notes \
+            --prerelease \
+            --latest=false
+
+      - name: Create stable release
+        if: ${{ !inputs.prerelease }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --target "${GITHUB_SHA}" \
+            --title "$TAG" \
+            --generate-notes \
+            --latest
