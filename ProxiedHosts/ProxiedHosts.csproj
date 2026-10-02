@@ -1,9 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<PublishAot>true</PublishAot>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<RootNamespace>ProxiedHosts</RootNamespace>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<AssemblyName>proxiedhosts</AssemblyName>
+		<!-- Set as false to see full analysis details. Default is true. -->
+		<TrimmerSingleWarn>true</TrimmerSingleWarn>
+		<Description>ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hostname-to-IP mappings without modifying the system hosts file.</Description>
+		<Copyright>Copyright © 2026</Copyright>
+		<Authors>Steven Jenkins De Haro</Authors>
+		<Version>1.0.0</Version>
+		<AssemblyVersion>1.0.0.26101</AssemblyVersion>
+		<FileVersion>1.0.0.26101</FileVersion>
+		<RepositoryUrl>https://github.com/StevenJDH/ProxiedHosts</RepositoryUrl>
+	</PropertyGroup>
 </Project>
