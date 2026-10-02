@@ -470,10 +470,28 @@ internal sealed class ProxyServer
 
         await Task.WhenAny(clientToUpstream, upstreamToClient);
 
-        try { client.Close(); } catch { }
-        try { upstream.Close(); } catch { }
+        try
+        {
+            client.Close();
+        }
+        catch
+        {
 
-        try { await Task.WhenAll(clientToUpstream, upstreamToClient); }
+        }
+
+        try
+        {
+            upstream.Close();
+        }
+        catch
+        {
+
+        }
+
+        try
+        {
+            await Task.WhenAll(clientToUpstream, upstreamToClient);
+        }
         catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
         {
             // Expected when either side closes first.
@@ -505,11 +523,7 @@ internal sealed class ProxyServer
     private static async Task WriteErrorAsync(Stream stream, int statusCode, string reason, string message, CancellationToken cancellationToken)
     {
         var body = Encoding.UTF8.GetBytes(message + "\n");
-        var header = Encoding.ASCII.GetBytes(
-            $"HTTP/1.1 {statusCode} {reason}\r\n" +
-            "Content-Type: text/plain; charset=utf-8\r\n" +
-            $"Content-Length: {body.Length}\r\n" +
-            "Connection: close\r\n\r\n");
+        var header = Encoding.ASCII.GetBytes($"HTTP/1.1 {statusCode} {reason}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n");
 
         await stream.WriteAsync(header, cancellationToken);
         await stream.WriteAsync(body, cancellationToken);
@@ -549,14 +563,18 @@ internal static class HttpHeaderReader
                 if (b == expected)
                 {
                     matched++;
-                    if (matched == 4)
+
+                    if (matched != 4)
                     {
-                        if (i + 1 < read)
-                        {
-                            output.Write(buffer, i + 1, read - i - 1);
-                        }
-                        return output.ToArray();
+                        continue;
                     }
+
+                    if (i + 1 < read)
+                    {
+                        output.Write(buffer, i + 1, read - i - 1);
+                    }
+
+                    return output.ToArray();
                 }
                 else
                 {
@@ -609,8 +627,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
             return true;
         }
 
-        if (Uri.TryCreate(target, UriKind.Absolute, out var uri) &&
-            (uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
+        if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && (uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
         {
             var port = uri.IsDefaultPort ? (uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? 443 : 80) : uri.Port;
             request = new ProxyRequest(method, uri.Host, port, false, uri.AbsoluteUri);
