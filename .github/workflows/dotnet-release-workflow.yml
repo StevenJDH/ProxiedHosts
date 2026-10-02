@@ -12,8 +12,8 @@ on:
         required: true
         default: false
         type: boolean
-      release_notes:
-        description: 'Optional release notes (Markdown). Leave blank to auto-generate.'
+      release_notes_file:
+        description: 'Optional Markdown file path, e.g. .github/release-notes/1.0.0.26101.md'
         required: false
         type: string
 
@@ -363,6 +363,9 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download release packages
         uses: actions/download-artifact@v8
         with:
@@ -397,14 +400,22 @@ jobs:
         id: release_notes
         shell: bash
         env:
-          RELEASE_NOTES: ${{ inputs.release_notes }}
+          RELEASE_NOTES_FILE: ${{ inputs.release_notes_file }}
         run: |
-          if [[ -n "${RELEASE_NOTES//[[:space:]]/}" ]]; then
-            printf '%s\n' "$RELEASE_NOTES" > release-notes.md
-            echo "provided=true" >> "$GITHUB_OUTPUT"
-          else
+          if [[ -z "${RELEASE_NOTES_FILE//[[:space:]]/}" ]]; then
             echo "provided=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          if [[ ! -f "$RELEASE_NOTES_FILE" ]]; then
+            echo "::error::Release notes file does not exist: $RELEASE_NOTES_FILE"
+            exit 1
+          fi
+
+          cp "$RELEASE_NOTES_FILE" release-notes.md
+
+          echo "provided=true" >> "$GITHUB_OUTPUT"
+          echo "Using release notes from: $RELEASE_NOTES_FILE"
 
       - name: Create prerelease with custom notes
         if: inputs.prerelease && steps.release_notes.outputs.provided == 'true'
