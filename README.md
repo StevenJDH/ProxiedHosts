@@ -10,19 +10,20 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 
 ## Features
 
-- Custom hostname-to-IP mappings using a familiar hosts-file-style format
+- Support Windows, Linux, and macOS (Intel/Apple Silicon) along with AOT compilation.
+- Custom hostname-to-IP mappings using a familiar hosts-file-style format.
 - Supports HTTP proxy requests.
 - Supports HTTPS tunneling via `CONNECT` without decrypting TLS.
-- No custom root certificate or TLS interception required
-- End-to-end TLS remains intact for HTTPS connections
+- No custom root certificate or TLS interception required.
+- End-to-end TLS remains intact for HTTPS connections.
 - Binds only to `127.0.0.1`.
 - Generates a random port on first run and persists it under the user's local application-data directory.
 - Reuses the same port on later runs.
 - Hot-reloads `proxiedhosts.txt` when it changes.
 - Keeps the previous valid mapping if a reload contains an error.
 - Automatic fallback to normal DNS resolution for unmapped hosts.
-- No administrator privileges required for normal operation
-- No modification of the system hosts file
+- No administrator privileges required for normal operation.
+- No modification of the system hosts file.
 
 ## Usage
 The application prints the proxy URL, for example:
