@@ -34,7 +34,12 @@ internal static class Program
         Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;
-            shutdown.Cancel();
+            if (!shutdown.IsCancellationRequested)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Stopping proxy...");
+                shutdown.Cancel();
+            }
         };
 
         try
@@ -55,7 +60,6 @@ internal static class Program
 
             Console.WriteLine("ProxiedHosts");
             Console.WriteLine("------------------");
-            Console.WriteLine($"Hosts file : {hostsPath}");
             Console.WriteLine($"Proxy      : http://127.0.0.1:{port}");
             Console.WriteLine($"Port       : {port} (stable and persisted)");
             Console.WriteLine($"Mappings   : {hostMap.Count}");
@@ -329,6 +333,22 @@ internal sealed class ProxyServer
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         _listener.Start();
+
+        // Explicitly stop the listener when cancellation is requested. This is
+        // important because it guarantees that a pending AcceptTcpClientAsync
+        // is unblocked immediately on Ctrl+C.
+        using var cancellationRegistration = cancellationToken.Register(() =>
+        {
+            try
+            {
+                _listener.Stop();
+            }
+            catch
+            {
+                // The listener may already be stopped during shutdown.
+            }
+        });
+
         try
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -338,7 +358,15 @@ internal sealed class ProxyServer
                 {
                     client = await _listener.AcceptTcpClientAsync(cancellationToken);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (SocketException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
