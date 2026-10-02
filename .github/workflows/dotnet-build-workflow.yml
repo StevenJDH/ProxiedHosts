@@ -27,7 +27,7 @@ permissions:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
-  SOLUTION_FILE: ProxiedHosts.sln
+  SOLUTION_FILE: ProxiedHosts.slnx
 
 jobs:
   build:
