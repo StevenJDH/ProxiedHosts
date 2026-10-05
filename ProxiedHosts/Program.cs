@@ -36,7 +36,7 @@ internal static class Program
             var portProvider = new PortProvider(configuration.ApplicationName);
             var port = await portProvider.GetOrCreateAvailablePortAsync(shutdown.Token);
             var proxyState = new ProxyState();
-            var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState);
+            var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, configuration.ConnectionLogMode);
             var proxy = new ProxyServer(configuration.ListenAddress, port, connectionHandler);
 
             Console.CancelKeyPress += (_, e) =>

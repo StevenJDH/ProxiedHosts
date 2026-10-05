@@ -31,11 +31,13 @@ internal sealed class ProxyConnectionHandler
 
     private readonly HostMappingProvider _hostMappings;
     private readonly ProxyState _proxyState;
+    private readonly ConnectionLogMode _logMode;
 
-    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState)
+    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly)
     {
         _hostMappings = hostMappings;
         _proxyState = proxyState;
+        _logMode = logMode;
     }
 
     public async Task HandleClientSafelyAsync(TcpClient client, CancellationToken cancellationToken)
@@ -49,6 +51,18 @@ internal sealed class ProxyConnectionHandler
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Normal shutdown.
+            }
+            catch (IOException)
+            {
+                // Normal client or upstream disconnect.
+            }
+            catch (SocketException)
+            {
+                // Normal client or upstream disconnect.
+            }
+            catch (ObjectDisposedException)
+            {
+                // Connection was closed while being processed.
             }
             catch (Exception ex)
             {
@@ -76,13 +90,8 @@ internal sealed class ProxyConnectionHandler
         }
 
         HostMapping? mapping = null;
-
-        if (_proxyState.IsActive)
-        {
-            _hostMappings.TryResolve(request.Host, out mapping);
-        }
-
-        var destinationAddress = mapping?.Address;
+        var isMapped = _proxyState.IsActive && _hostMappings.TryResolve(request.Host, out mapping);
+        var destinationAddress = isMapped ? mapping!.Address : null;
 
         using var upstream = new TcpClient
         {
@@ -91,19 +100,25 @@ internal sealed class ProxyConnectionHandler
 
         try
         {
-            if (destinationAddress is not null)
+            if (isMapped)
             {
-                await upstream.ConnectAsync(destinationAddress, request.Port, cancellationToken)
+                if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
+                {
+                    Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{request.Port}");
+                }
+
+                await upstream.ConnectAsync(destinationAddress!, request.Port, cancellationToken)
                     .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
-                Console.WriteLine(
-                    $"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{request.Port}");
             }
             else
             {
+                if (_logMode == ConnectionLogMode.All)
+                {
+                    Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> DNS");
+                }
+
                 await upstream.ConnectAsync(request.Host, request.Port, cancellationToken)
                     .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
-                Console.WriteLine(
-                    $"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> DNS");
             }
         }
         catch (Exception ex) when (ex is SocketException or TimeoutException)
@@ -117,8 +132,7 @@ internal sealed class ProxyConnectionHandler
 
         if (request.IsConnect)
         {
-            var established =
-                Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ProxiedHosts\r\n\r\n");
+            var established = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ProxiedHosts\r\n\r\n");
             await clientStream.WriteAsync(established, cancellationToken);
         }
         else
