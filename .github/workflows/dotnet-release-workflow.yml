@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version, e.g. 1.0.0.26101'
-        required: true
+        description: 'Optional version override, e.g. 1.0.0.26101. Leave blank to use the project file.'
+        required: false
+        default: ''
         type: string
       prerelease:
         description: 'Mark this release as a prerelease'
@@ -14,6 +15,7 @@ on:
         type: boolean
       release_notes_file:
         description: 'Optional Markdown file path, e.g. .github/release-notes/1.0.0.26101.md'
+        default: ''
         required: false
         type: string
 
@@ -31,7 +33,6 @@ env:
   APP_NAME: proxiedhosts
 
 jobs:
-
   # ------------------------------------------------------------
   # Validate and normalize the requested version.
   # ------------------------------------------------------------
@@ -41,35 +42,90 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       package_version: ${{ steps.version.outputs.package_version }}
+      assembly_version: ${{ steps.version.outputs.assembly_version }}
+      file_version: ${{ steps.version.outputs.file_version }}
       tag: ${{ steps.version.outputs.tag }}
 
     steps:
-      - name: Validate version
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
         id: version
         shell: bash
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
-          VERSION="${VERSION#v}"
+          set -euo pipefail
 
-          if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "::error::Invalid version '$VERSION'. Expected format such as 1.0.0.26101."
-            exit 1
+          PROJECT_VERSION="$(dotnet msbuild "${PROJECT_FILE}" -nologo -getProperty:Version)"
+          PROJECT_ASSEMBLY_VERSION="$(dotnet msbuild "${PROJECT_FILE}" -nologo -getProperty:AssemblyVersion)"
+          PROJECT_FILE_VERSION="$(dotnet msbuild "${PROJECT_FILE}" -nologo -getProperty:FileVersion)"
+
+          VERSION_OVERRIDE="${VERSION_OVERRIDE#v}"
+
+          if [[ -n "${VERSION_OVERRIDE//[[:space:]]/}" ]]; then
+
+            if [[ ! "$VERSION_OVERRIDE" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              echo "::error::Invalid version '$VERSION_OVERRIDE'. Expected format such as 1.0.0.26101."
+              exit 1
+            fi
+
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+
+            PACKAGE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            ASSEMBLY_VERSION="$VERSION_OVERRIDE"
+            FILE_VERSION="$VERSION_OVERRIDE"
+            RELEASE_VERSION="$VERSION_OVERRIDE"
+
+            echo "Using workflow version override."
+          else
+            if [[ ! "$PROJECT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Project Version '$PROJECT_VERSION' must have the format 1.0.0."
+              exit 1
+            fi
+
+            if [[ ! "$PROJECT_ASSEMBLY_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Project AssemblyVersion '$PROJECT_ASSEMBLY_VERSION' must have the format 1.0.0.26101."
+              exit 1
+            fi
+
+            if [[ ! "$PROJECT_FILE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Project FileVersion '$PROJECT_FILE_VERSION' must have the format 1.0.0.26101."
+              exit 1
+            fi
+
+            if [[ "$PROJECT_ASSEMBLY_VERSION" != "$PROJECT_FILE_VERSION" ]]; then
+              echo "::error::AssemblyVersion and FileVersion do not match."
+              exit 1
+            fi
+
+            PACKAGE_VERSION="$PROJECT_VERSION"
+            ASSEMBLY_VERSION="$PROJECT_ASSEMBLY_VERSION"
+            FILE_VERSION="$PROJECT_FILE_VERSION"
+            RELEASE_VERSION="$PROJECT_FILE_VERSION"
+
+            echo "Using versions from project file."
           fi
 
-          MAJOR="${BASH_REMATCH[1]}"
-          MINOR="${BASH_REMATCH[2]}"
-          PATCH="${BASH_REMATCH[3]}"
-
-          PACKAGE_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "assembly_version=$ASSEMBLY_VERSION" >> "$GITHUB_OUTPUT"
+          echo "file_version=$FILE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
 
-          echo "Release version: $VERSION"
-          echo "Package version: $PACKAGE_VERSION"
-          echo "Assembly/File version: $VERSION"
-          echo "Tag: $VERSION"
+          echo "Package version  : $PACKAGE_VERSION"
+          echo "Assembly version : $ASSEMBLY_VERSION"
+          echo "File version     : $FILE_VERSION"
+          echo "Release version  : $RELEASE_VERSION"
+          echo "Tag              : $RELEASE_VERSION"
 
   # ------------------------------------------------------------
   # Windows + Linux
@@ -131,8 +187,8 @@ jobs:
           --self-contained true
           -p:PublishAot=true
           -p:Version="${{ needs.prepare.outputs.package_version }}"
-          -p:AssemblyVersion="${{ needs.prepare.outputs.version }}"
-          -p:FileVersion="${{ needs.prepare.outputs.version }}"
+          -p:AssemblyVersion="${{ needs.prepare.outputs.assembly_version }}"
+          -p:FileVersion="${{ needs.prepare.outputs.file_version }}"
           -o "publish/${{ matrix.rid }}"
 
       # ----------------------------------------------------------
@@ -256,8 +312,8 @@ jobs:
             --self-contained true \
             -p:PublishAot=true \
             -p:Version="${{ needs.prepare.outputs.package_version }}" \
-            -p:AssemblyVersion="${{ needs.prepare.outputs.version }}" \
-            -p:FileVersion="${{ needs.prepare.outputs.version }}" \
+            -p:AssemblyVersion="${{ needs.prepare.outputs.assembly_version }}" \
+            -p:FileVersion="${{ needs.prepare.outputs.file_version }}" \
             -o publish/osx-arm64
 
       - name: Publish macOS x64
@@ -269,8 +325,8 @@ jobs:
             --self-contained true \
             -p:PublishAot=true \
             -p:Version="${{ needs.prepare.outputs.package_version }}" \
-            -p:AssemblyVersion="${{ needs.prepare.outputs.version }}" \
-            -p:FileVersion="${{ needs.prepare.outputs.version }}" \
+            -p:AssemblyVersion="${{ needs.prepare.outputs.assembly_version }}" \
+            -p:FileVersion="${{ needs.prepare.outputs.file_version }}" \
             -o publish/osx-x64
 
       - name: Create universal macOS binary
