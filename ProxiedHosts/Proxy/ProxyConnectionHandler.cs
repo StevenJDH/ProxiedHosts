@@ -30,10 +30,12 @@ internal sealed class ProxyConnectionHandler
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
 
     private readonly HostMappingProvider _hostMappings;
+    private readonly ProxyState _proxyState;
 
-    public ProxyConnectionHandler(HostMappingProvider hostMappings)
+    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState)
     {
         _hostMappings = hostMappings;
+        _proxyState = proxyState;
     }
 
     public async Task HandleClientSafelyAsync(TcpClient client, CancellationToken cancellationToken)
@@ -73,7 +75,13 @@ internal sealed class ProxyConnectionHandler
             return;
         }
 
-        var mapping = _hostMappings.TryResolve(request.Host, out var mapped) ? mapped : null;
+        HostMapping? mapping = null;
+
+        if (_proxyState.IsActive)
+        {
+            _hostMappings.TryResolve(request.Host, out mapping);
+        }
+
         var destinationAddress = mapping?.Address;
 
         using var upstream = new TcpClient
