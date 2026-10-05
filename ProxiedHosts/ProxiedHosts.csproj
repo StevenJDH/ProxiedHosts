@@ -15,8 +15,8 @@
 		<Copyright>Copyright © 2026</Copyright>
 		<Authors>Steven Jenkins De Haro</Authors>
 		<Version>1.0.0</Version>
-		<AssemblyVersion>1.0.0.26101</AssemblyVersion>
-		<FileVersion>1.0.0.26101</FileVersion>
+		<AssemblyVersion>1.0.0.26102</AssemblyVersion>
+		<FileVersion>1.0.0.26102</FileVersion>
 		<RepositoryUrl>https://github.com/StevenJDH/ProxiedHosts</RepositoryUrl>
 	</PropertyGroup>
 </Project>
