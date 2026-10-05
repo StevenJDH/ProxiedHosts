@@ -14,7 +14,7 @@ on:
         default: false
         type: boolean
       release_notes_file:
-        description: 'Optional Markdown file path, e.g. .github/release-notes/1.0.0.26101.md'
+        description: 'Optional release notes file override. Leave blank to use .github/release-notes/<version>.md if present.'
         default: ''
         required: false
         type: string
@@ -456,22 +456,39 @@ jobs:
         id: release_notes
         shell: bash
         env:
-          RELEASE_NOTES_FILE: ${{ inputs.release_notes_file }}
+          RELEASE_NOTES_OVERRIDE: ${{ inputs.release_notes_file }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          if [[ -z "${RELEASE_NOTES_FILE//[[:space:]]/}" ]]; then
+          set -euo pipefail
+
+          DEFAULT_RELEASE_NOTES=".github/release-notes/${RELEASE_VERSION}.md"
+
+          # Explicit workflow input takes precedence.
+          if [[ -n "${RELEASE_NOTES_OVERRIDE//[[:space:]]/}" ]]; then
+            if [[ ! -f "$RELEASE_NOTES_OVERRIDE" ]]; then
+              echo "::error::Release notes override does not exist: $RELEASE_NOTES_OVERRIDE"
+              exit 1
+            fi
+
+            RELEASE_NOTES_FILE="$RELEASE_NOTES_OVERRIDE"
+            echo "Using release notes override: $RELEASE_NOTES_FILE"
+
+          # Otherwise use the conventional release notes file, if present.
+          elif [[ -f "$DEFAULT_RELEASE_NOTES" ]]; then
+            RELEASE_NOTES_FILE="$DEFAULT_RELEASE_NOTES"
+            echo "Using default release notes: $RELEASE_NOTES_FILE"
+
+          # No release notes file is available, so generated notes will be used.
+          else
+            echo "No release notes file found."
+            echo "GitHub-generated release notes will be used."
             echo "provided=false" >> "$GITHUB_OUTPUT"
             exit 0
-          fi
-
-          if [[ ! -f "$RELEASE_NOTES_FILE" ]]; then
-            echo "::error::Release notes file does not exist: $RELEASE_NOTES_FILE"
-            exit 1
           fi
 
           cp "$RELEASE_NOTES_FILE" release-notes.md
 
           echo "provided=true" >> "$GITHUB_OUTPUT"
-          echo "Using release notes from: $RELEASE_NOTES_FILE"
 
       - name: Create prerelease with custom notes
         if: inputs.prerelease && steps.release_notes.outputs.provided == 'true'
