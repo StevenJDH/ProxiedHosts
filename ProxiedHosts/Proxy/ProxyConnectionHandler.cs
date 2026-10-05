@@ -29,11 +29,11 @@ internal sealed class ProxyConnectionHandler
 
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
 
-    private readonly HostMap _hostMap;
+    private readonly HostMappingProvider _hostMappings;
 
-    public ProxyConnectionHandler(HostMap hostMap)
+    public ProxyConnectionHandler(HostMappingProvider hostMappings)
     {
-        _hostMap = hostMap;
+        _hostMappings = hostMappings;
     }
 
     public async Task HandleClientSafelyAsync(TcpClient client, CancellationToken cancellationToken)
@@ -73,9 +73,8 @@ internal sealed class ProxyConnectionHandler
             return;
         }
 
-        var destinationAddress = _hostMap.TryResolve(request.Host, out var mapped)
-            ? mapped
-            : null;
+        var mapping = _hostMappings.TryResolve(request.Host, out var mapped) ? mapped : null;
+        var destinationAddress = mapping?.Address;
 
         using var upstream = new TcpClient
         {
@@ -185,8 +184,7 @@ internal sealed class ProxyConnectionHandler
     private static async Task WriteErrorAsync(Stream stream, int statusCode, string reason, string message, CancellationToken cancellationToken)
     {
         var body = Encoding.UTF8.GetBytes(message + "\n");
-        var header =
-            Encoding.ASCII.GetBytes(
+        var header = Encoding.ASCII.GetBytes(
                 $"HTTP/1.1 {statusCode} {reason}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n");
 
         await stream.WriteAsync(header, cancellationToken);

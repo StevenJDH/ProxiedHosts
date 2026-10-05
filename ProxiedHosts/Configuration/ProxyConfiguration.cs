@@ -1,4 +1,4 @@
-﻿/*
+/*
  * This file is part of ProxiedHosts <https://github.com/StevenJDH/ProxiedHosts>.
  * Copyright (C) 2026 Steven Jenkins De Haro.
  *
@@ -16,28 +16,16 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System.Text;
+using System.Net;
 
-namespace ProxiedHosts.Hosts;
+namespace ProxiedHosts.Configuration;
 
-internal static class HostsFile
+internal sealed record ProxyConfiguration(string ApplicationName, IPAddress ListenAddress, string HostsFilePath)
 {
-    public static void EnsureExists(string hostsPath)
+    public static ProxyConfiguration Load()
     {
-        if (File.Exists(hostsPath))
-        {
-            return;
-        }
-
-        const string template = """
-                                # proxiedhosts.txt
-                                # Format: <ip-address> <hostname> [hostname2 ...]
-                                # Example:
-                                # 127.0.0.1 myapp.local
-                                # 192.168.1.50 api.example.com
-                                """;
-
-        File.WriteAllText(hostsPath, template, Encoding.UTF8);
-        Console.WriteLine($"Created {hostsPath}");
+        return new ProxyConfiguration(ApplicationName: "ProxiedHosts",
+                                      ListenAddress: IPAddress.Loopback,
+                                      HostsFilePath: Path.Combine(AppContext.BaseDirectory, "proxiedhosts.txt"));
     }
 }

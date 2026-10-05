@@ -16,8 +16,8 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using ProxiedHosts.Configuration;
 using ProxiedHosts.Hosts;
-using System.Net;
 using ProxiedHosts.Infrastructure;
 using ProxiedHosts.Proxy;
 
@@ -47,25 +47,18 @@ internal static class Program
 
         try
         {
-            var appDirectory = AppContext.BaseDirectory;
-            var hostsPath = Path.Combine(appDirectory, HostsFileName);
-
-            HostsFile.EnsureExists(hostsPath);
-
-            var hostMap = new HostMap(hostsPath);
-            hostMap.Reload();
-            using var watcher = new HostFileWatcher(hostMap);
-
-            var portStore = new StablePortStore("ProxiedHosts");
-            var port = await portStore.GetOrCreateAvailablePortAsync(shutdown.Token);
-            var connectionHandler = new ProxyConnectionHandler(hostMap);
-            var proxy = new ProxyServer(IPAddress.Loopback, port, connectionHandler);
+            var configuration = ProxyConfiguration.Load();
+            using var hostMappings = new HostMappingProvider(configuration.HostsFilePath);
+            var portProvider = new PortProvider(configuration.ApplicationName);
+            var port = await portProvider.GetOrCreateAvailablePortAsync(shutdown.Token);
+            var connectionHandler = new ProxyConnectionHandler(hostMappings);
+            var proxy = new ProxyServer(configuration.ListenAddress, port, connectionHandler);
 
             Console.WriteLine("ProxiedHosts");
             Console.WriteLine("------------------");
             Console.WriteLine($"Proxy      : http://127.0.0.1:{port}");
             Console.WriteLine($"Port       : {port} (stable and persisted)");
-            Console.WriteLine($"Mappings   : {hostMap.Count}");
+            Console.WriteLine($"Mappings   : {hostMappings.Count}");
             Console.WriteLine();
             Console.WriteLine("Configure your application to use the proxy above for HTTP and HTTPS.");
             Console.WriteLine("HTTPS is tunneled with CONNECT; TLS is not decrypted or inspected.");

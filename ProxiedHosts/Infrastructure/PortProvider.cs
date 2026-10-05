@@ -22,13 +22,13 @@ using System.Security.Cryptography;
 
 namespace ProxiedHosts.Infrastructure;
 
-internal sealed class StablePortStore
+internal sealed class PortProvider
 {
     private const int MinPort = 20000;
     private const int MaxPort = 45000;
     private readonly string _portFile;
 
-    public StablePortStore(string appName)
+    public PortProvider(string appName)
     {
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
@@ -37,9 +37,9 @@ internal sealed class StablePortStore
             root = AppContext.BaseDirectory;
         }
 
-        var directory = System.IO.Path.Combine(root, appName);
+        var directory = Path.Combine(root, appName);
         Directory.CreateDirectory(directory);
-        _portFile = System.IO.Path.Combine(directory, "proxy.port");
+        _portFile = Path.Combine(directory, "proxy.port");
     }
 
     public async Task<int> GetOrCreateAvailablePortAsync(CancellationToken cancellationToken)
@@ -47,6 +47,7 @@ internal sealed class StablePortStore
         if (File.Exists(_portFile))
         {
             var text = (await File.ReadAllTextAsync(_portFile, cancellationToken)).Trim();
+
             if (int.TryParse(text, out var persisted) && persisted is >= MinPort and <= MaxPort)
             {
                 if (IsPortAvailable(persisted))
@@ -54,21 +55,21 @@ internal sealed class StablePortStore
                     return persisted;
                 }
 
-                throw new InvalidOperationException(
-                    $"The persisted proxy port {persisted} is already in use. " +
-                    $"Close the process using it, or delete '{_portFile}' to generate a new stable port.");
+                throw new InvalidOperationException($"The persisted proxy port {persisted} is already in use. Close the process using it, or delete '{_portFile}' to generate a new stable port.");
             }
         }
 
         for (var attempt = 0; attempt < 100; attempt++)
         {
             var candidate = RandomNumberGenerator.GetInt32(MinPort, MaxPort + 1);
+
             if (!IsPortAvailable(candidate))
             {
                 continue;
             }
 
             await File.WriteAllTextAsync(_portFile, candidate.ToString(), cancellationToken);
+
             return candidate;
         }
 
@@ -82,6 +83,7 @@ internal sealed class StablePortStore
         {
             listener = new TcpListener(IPAddress.Loopback, port);
             listener.Start();
+
             return true;
         }
         catch (SocketException)
