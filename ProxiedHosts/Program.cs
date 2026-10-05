@@ -74,6 +74,7 @@ internal static class Program
 
             _ = Task.Run(() => RunInputLoop(proxyState, shutdown));
             await proxy.RunAsync(shutdown.Token);
+            Console.WriteLine("Proxy stopped.");
 
             return 0;
         }
