@@ -116,14 +116,13 @@ internal sealed class HostMappingProvider : IDisposable
 
                     if (parts.Length < 2)
                     {
-                        Console.Error.WriteLine(
-                            $"Ignoring invalid hosts entry on line {i + 1}: expected '<ip> <hostname>'.");
+                        Console.Error.WriteLine($"Ignoring invalid hosts entry on line {i + 1}: expected '<ip> <hostname>'.");
                         continue;
                     }
 
-                    if (!IPAddress.TryParse(parts[0], out var ip))
+                    if (!TryParseEndpoint(parts[0], out var ip, out var port))
                     {
-                        Console.Error.WriteLine($"Ignoring invalid IP address '{parts[0]}' on line {i + 1}.");
+                        Console.Error.WriteLine($"Ignoring invalid IP address or port '{parts[0]}' on line {i + 1}.");
                         continue;
                     }
 
@@ -137,7 +136,7 @@ internal sealed class HostMappingProvider : IDisposable
                             continue;
                         }
 
-                        nextMappings[host] = new HostMapping(host, ip);
+                        nextMappings[host] = new HostMapping(host, ip!, port);
                     }
                 }
 
@@ -157,6 +156,75 @@ internal sealed class HostMappingProvider : IDisposable
         }
     }
 
+    private static bool TryParseEndpoint(string value, out IPAddress? address, out int? port)
+    {
+        address = null;
+        port = null;
+
+        // IPv6 with port: [::1]:8080
+        if (value.StartsWith('['))
+        {
+            var closingBracket = value.IndexOf(']');
+
+            if (closingBracket <= 1)
+            {
+                return false;
+            }
+
+            var addressText = value[1..closingBracket];
+
+            if (!IPAddress.TryParse(addressText, out address))
+            {
+                return false;
+            }
+
+            if (closingBracket == value.Length - 1)
+            {
+                return true;
+            }
+
+            if (value[closingBracket + 1] != ':')
+            {
+                return false;
+            }
+
+            return TryParsePort(value[(closingBracket + 2)..], out port);
+        }
+
+        // Plain IP address, including IPv6 without a port.
+        if (IPAddress.TryParse(value, out address))
+        {
+            return true;
+        }
+
+        // IPv4 with port: 127.0.0.1:8080
+        var colonIndex = value.LastIndexOf(':');
+
+        if (colonIndex <= 0)
+        {
+            return false;
+        }
+
+        var addressPart = value[..colonIndex];
+        var portPart = value[(colonIndex + 1)..];
+
+        return IPAddress.TryParse(addressPart, out address) && TryParsePort(portPart, out port);
+    }
+
+
+    private static bool TryParsePort(string value, out int? port)
+    {
+        port = null;
+
+        if (!int.TryParse(value, out var parsedPort) || parsedPort is < 1 or > 65535)
+        {
+            return false;
+        }
+
+        port = parsedPort;
+        return true;
+    }
+
     private static string NormalizeHost(string host) => host.Trim().TrimEnd('.');
 
     private void EnsureFileExists()
@@ -168,11 +236,13 @@ internal sealed class HostMappingProvider : IDisposable
 
         const string template = """
                                 # proxiedhosts.txt
-                                # Format: <ip-address> <hostname> [hostname2 ...]
+                                # Format: <ip-address>[:port] <hostname> [hostname2 ...]
                                 #
                                 # Examples:
                                 # 127.0.0.1 myapp.local
-                                # 192.168.1.50 api.example.com
+                                # 127.0.0.1:8080 myapp.local
+                                # 192.168.1.50:8443 api.example.com
+                                # [::1]:8080 ipv6.example.com
                                 """;
 
         File.WriteAllText(_filePath, template, Encoding.UTF8);

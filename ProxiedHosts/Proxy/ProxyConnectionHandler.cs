@@ -92,6 +92,7 @@ internal sealed class ProxyConnectionHandler
         HostMapping? mapping = null;
         var isMapped = _proxyState.IsActive && _hostMappings.TryResolve(request.Host, out mapping);
         var destinationAddress = isMapped ? mapping!.Address : null;
+        var destinationPort = isMapped ? mapping!.Port ?? request.Port : request.Port;
 
         using var upstream = new TcpClient
         {
@@ -104,10 +105,10 @@ internal sealed class ProxyConnectionHandler
             {
                 if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
                 {
-                    Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{request.Port}");
+                    Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{destinationPort}");
                 }
 
-                await upstream.ConnectAsync(destinationAddress!, request.Port, cancellationToken)
+                await upstream.ConnectAsync(destinationAddress!, destinationPort, cancellationToken)
                     .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
             }
             else

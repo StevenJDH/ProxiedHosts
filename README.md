@@ -13,6 +13,7 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 
 - Support Windows, Linux, and macOS (Intel/Apple Silicon) along with AOT compilation.
 - Custom hostname-to-IP mappings using a familiar hosts-file-style format.
+- Supports entries with ports to redirect requests.
 - Supports HTTP proxy requests.
 - Supports HTTPS tunneling via `CONNECT` without decrypting TLS.
 - No custom root certificate or TLS interception required.
