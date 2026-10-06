@@ -2,6 +2,7 @@
 
 [![build](https://github.com/StevenJDH/ProxiedHosts/actions/workflows/dotnet-build-workflow.yml/badge.svg)](https://github.com/StevenJDH/ProxiedHosts/actions/workflows/dotnet-build-workflow.yml)
 ![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/StevenJDH/ProxiedHosts?include_prereleases)
+![GitHub All Releases](https://img.shields.io/github/downloads/StevenJDH/ProxiedHosts/total)
 ![Maintenance](https://img.shields.io/badge/yes-4FCA21?label=maintained&style=flat)
 ![GitHub](https://img.shields.io/github/license/StevenJDH/ProxiedHosts)
 
@@ -19,30 +20,40 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 - No custom root certificate or TLS interception required.
 - End-to-end TLS remains intact for HTTPS connections.
 - Binds only to `127.0.0.1`.
-- Generates a random port on first run and persists it under the user's local application-data directory.
-- Reuses the same port on later runs.
+- Generates a random port on first run and persists it for later runs.
 - Hot-reloads `proxiedhosts.txt` when it changes.
 - Keeps the previous valid mapping if a reload contains an error.
 - Automatic fallback to normal DNS resolution for unmapped hosts.
 - No administrator privileges required for normal operation.
 - No modification of the system hosts file.
+- Toggle proxy state to enable traffic passthrough without mapping requests.
 
 ## Usage
-The application prints the proxy URL, for example:
+Run the application to see the printout of the proxy URL configuration, for example:
 
 ```text
 Proxy      : http://127.0.0.1:28741
 Port       : 28741 (stable and persisted)
 ```
 
-Configure the client application to use that address for both HTTP and HTTPS proxying.
+Configure the client application or system to use that address for both HTTP and HTTPS proxying.
 
 > [!TIP]
 > For Linux and macOS, run `chmod +x proxiedhosts` to set the execution bit so that `./proxiedhosts` works for running the application. Also, macOS users will likely need to run `xattr -d com.apple.quarantine proxiedhosts` to remove the quarantine attribute so that it doesn't get block by Gatekeeper. Alternatively, the execution can be approved by going to `System Settings > Privacy & Security`.
 
-## `proxiedhosts.txt`
+### Proxy port generation
+On first run, the application selects an unused port in the range `20000-45000` and writes it to:
 
-Format is similar to the operating-system hosts file:
+- Windows: `%LOCALAPPDATA%\ProxiedHosts\proxy.port`.
+- Other platforms: the .NET local-application-data location for the current user.
+
+On later runs, the same port is reused. If another process is already using that port, the proxy exits with an error instead of silently changing ports. Delete `proxy.port` if a new port is needed.
+
+## Mapping file syntax
+
+**Format:** `<ip-address>[:port] <hostname> [hostname2 ...]`
+
+The syntax is similar to the operating-system hosts file:
 
 ```text
 127.0.0.1 myapp.local
@@ -56,30 +67,16 @@ Comments are supported:
 192.168.1.50 api.example.com # test environment
 ```
 
-## Stable port behavior
+Additionally, entries with ports are supported, which isn´t possible with the system's host file:
 
-On first run, the application selects an unused port in the range `20000-45000` and writes it to:
+```text
+127.0.0.1:8080 myapp.local
+192.168.1.50:8443 api.example.com
+[::1]:8080 ipv6.example.com
+```
 
-- Windows: `%LOCALAPPDATA%\ProxiedHostsProxy\proxy.port`
-- Other platforms: the .NET local-application-data location for the current user
-
-On later runs, the same port is reused. If another process is already using that port, the proxy exits with an error instead of silently changing ports. Delete `proxy.port` if you intentionally want a new stable port.
-
-## Security notes
-
-The listener binds to `127.0.0.1` only, so it is not exposed to other machines on the network.
-
-HTTPS traffic is tunneled byte-for-byte. The proxy does not install a root certificate, inspect TLS traffic, or modify certificates.
-
-## Limitations
-
-This is intentionally a small development proxy, not a production-grade general-purpose HTTP proxy. In particular:
-
-- It only affects applications that are explicitly configured to use it.
-- It does not transparently intercept arbitrary TCP traffic.
-- It does not implement proxy authentication.
-- It does not decrypt HTTPS.
-- Some applications may ignore system/application proxy settings.
+> [!IMPORTANT]  
+> Port numbers must be in the range of 1-65535 inclusively to be valid.
 
 ## Disclaimer
 ProxiedHosts is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
