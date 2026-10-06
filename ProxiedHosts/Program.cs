@@ -58,6 +58,7 @@ internal static class Program
                 Console.WriteLine(active ? "Proxy mappings activated." : "Proxy mappings deactivated. Traffic will use normal DNS.");
             };
 
+            Console.WriteLine();
             Console.WriteLine("ProxiedHosts");
             Console.WriteLine("------------------");
             Console.WriteLine($"Proxy      : http://127.0.0.1:{port}");
