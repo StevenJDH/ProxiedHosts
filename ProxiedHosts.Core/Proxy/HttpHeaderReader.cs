@@ -20,6 +20,8 @@ namespace ProxiedHosts.Core.Proxy;
 
 internal static class HttpHeaderReader
 {
+    private static ReadOnlySpan<byte> HeaderTerminator => "\r\n\r\n"u8;
+
     public static async Task<byte[]?> ReadAsync(Stream stream, int maxBytes, CancellationToken cancellationToken)
     {
         using var output = new MemoryStream();
@@ -32,45 +34,52 @@ internal static class HttpHeaderReader
 
             if (read == 0)
             {
-                return output.Length == 0 ? null : throw new IOException("Connection closed before the HTTP header was complete.");
+                return HandleConnectionClosed(output);
             }
 
-            for (var i = 0; i < read; i++)
+            if (ProcessBuffer(buffer.AsSpan(0, read), output, ref matched))
             {
-                var b = buffer[i];
-
-                output.WriteByte(b);
-
-                var expected = matched switch
-                {
-                    0 => (byte)'\r',
-                    1 => (byte)'\n',
-                    2 => (byte)'\r',
-                    3 => (byte)'\n',
-                    _ => throw new InvalidOperationException("Invalid header parser state.")
-                };
-
-                if (b == expected)
-                {
-                    matched++;
-
-                    if (matched != 4)
-                    {
-                        continue;
-                    }
-
-                    if (i + 1 < read)
-                    {
-                        output.Write(buffer, i + 1, read - i - 1);
-                    }
-
-                    return output.ToArray();
-                }
-
-                matched = b == (byte)'\r' ? 1 : 0;
+                return output.ToArray();
             }
         }
 
         throw new IOException($"HTTP header exceeded the {maxBytes}-byte limit.");
+    }
+
+    private static bool ProcessBuffer(ReadOnlySpan<byte> buffer, MemoryStream output, ref int matched)
+    {
+        for (var i = 0; i < buffer.Length; i++)
+        {
+            var value = buffer[i];
+
+            output.WriteByte(value);
+
+            if (value == HeaderTerminator[matched])
+            {
+                matched++;
+
+                if (matched == HeaderTerminator.Length)
+                {
+                    output.Write(buffer[(i + 1)..]);
+                    return true;
+                }
+
+                continue;
+            }
+
+            matched = value == (byte)'\r' ? 1 : 0;
+        }
+
+        return false;
+    }
+
+    private static byte[]? HandleConnectionClosed(MemoryStream output)
+    {
+        if (output.Length == 0)
+        {
+            return null;
+        }
+
+        throw new IOException("Connection closed before the HTTP header was complete.");
     }
 }

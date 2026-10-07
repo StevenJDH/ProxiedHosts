@@ -32,7 +32,31 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         var headerOnly = headerEnd >= 0 ? headerText[..headerEnd] : headerText;
         var lines = headerOnly.Split("\r\n", StringSplitOptions.None);
 
-        if (lines.Length == 0)
+        if (!TryParseRequestLine(lines, out var method, out var target, out error))
+        {
+            return false;
+        }
+
+        if (method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase))
+        {
+            return TryParseConnectRequest(method, target, out request, out error);
+        }
+
+        if (TryParseAbsoluteRequest(method, target, out request))
+        {
+            return true;
+        }
+
+        return TryParseHostHeaderRequest(lines, method, out request, out error);
+    }
+
+    private static bool TryParseRequestLine(string[] lines, out string method, out string target, out string? error)
+    {
+        method = string.Empty;
+        target = string.Empty;
+        error = null;
+
+        if (lines.Length == 0 || string.IsNullOrWhiteSpace(lines[0]))
         {
             error = "Missing request line.";
             return false;
@@ -46,33 +70,57 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
             return false;
         }
 
-        var method = requestParts[0];
-        var target = requestParts[1];
-        var isConnect = method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase);
+        method = requestParts[0];
+        target = requestParts[1];
 
-        if (isConnect)
+        return true;
+    }
+
+    private static bool TryParseConnectRequest(string method, string target, out ProxyRequest request, out string? error)
+    {
+        request = default!;
+        error = null;
+
+        if (!TryParseHostPort(target, 443, out var host, out var port))
         {
-            if (!TryParseHostPort(target, 443, out var connectHost, out var connectPort))
-            {
-                error = "Invalid CONNECT target.";
-                return false;
-            }
-
-            request = new ProxyRequest(method, connectHost, connectPort, true, null);
-            return true;
+            error = "Invalid CONNECT target.";
+            return false;
         }
 
-        if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && (uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
-        {
-            var port = uri.IsDefaultPort ? (uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? 443 : 80) : uri.Port;
+        request = new ProxyRequest(method, host, port, true, null);
 
-            request = new ProxyRequest(method, uri.Host, port, false, uri.AbsoluteUri);
-            return true;
+        return true;
+    }
+
+    private static bool TryParseAbsoluteRequest(string method, string target, out ProxyRequest request)
+    {
+        request = default!;
+
+        if (!Uri.TryCreate(target, UriKind.Absolute, out var uri))
+        {
+            return false;
         }
+
+        if (!IsSupportedScheme(uri.Scheme))
+        {
+            return false;
+        }
+
+        var port = uri.IsDefaultPort ? GetDefaultPort(uri.Scheme) : uri.Port;
+
+        request = new ProxyRequest(method, uri.Host, port, false, uri.AbsoluteUri);
+
+        return true;
+    }
+
+    private static bool TryParseHostHeaderRequest(string[] lines, string method, out ProxyRequest request, out string? error)
+    {
+        request = default!;
+        error = null;
 
         var hostHeader = lines
             .Skip(1)
-            .FirstOrDefault(l => l.StartsWith("Host:", StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(line => line.StartsWith("Host:", StringComparison.OrdinalIgnoreCase));
 
         if (hostHeader is null)
         {
@@ -82,14 +130,25 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
 
         var hostValue = hostHeader[5..].Trim();
 
-        if (!TryParseHostPort(hostValue, 80, out var host, out var hostPort))
+        if (!TryParseHostPort(hostValue, 80, out var host, out var port))
         {
             error = "Invalid Host header.";
             return false;
         }
 
-        request = new ProxyRequest(method, host, hostPort, false, null);
+        request = new ProxyRequest(method, host, port, false, null);
+
         return true;
+    }
+
+    private static bool IsSupportedScheme(string scheme)
+    {
+        return scheme.Equals("http", StringComparison.OrdinalIgnoreCase) || scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int GetDefaultPort(string scheme)
+    {
+        return scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? 443 : 80;
     }
 
     public static byte[] RewriteForOriginServer(byte[] rawHeader, ProxyRequest request)
