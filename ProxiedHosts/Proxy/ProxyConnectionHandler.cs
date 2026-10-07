@@ -77,6 +77,7 @@ internal sealed class ProxyConnectionHandler
         await using var clientStream = client.GetStream();
 
         var requestHeader = await HttpHeaderReader.ReadAsync(clientStream, MaxHeaderBytes, cancellationToken);
+
         if (requestHeader is null)
         {
             return;
@@ -90,9 +91,7 @@ internal sealed class ProxyConnectionHandler
         }
 
         HostMapping? mapping = null;
-        var isMapped = _proxyState.IsActive && _hostMappings.TryResolve(request.Host, out mapping);
-        var destinationAddress = isMapped ? mapping!.Address : null;
-        var destinationPort = isMapped ? mapping!.Port ?? request.Port : request.Port;
+        var isMapped = _proxyState.IsActive && _hostMappings.TryResolve(request.Host, request.Port, out mapping);
 
         using var upstream = new TcpClient
         {
@@ -101,26 +100,7 @@ internal sealed class ProxyConnectionHandler
 
         try
         {
-            if (isMapped)
-            {
-                if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
-                {
-                    Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{destinationPort}");
-                }
-
-                await upstream.ConnectAsync(destinationAddress!, destinationPort, cancellationToken)
-                    .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
-            }
-            else
-            {
-                if (_logMode == ConnectionLogMode.All)
-                {
-                    Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> DNS");
-                }
-
-                await upstream.ConnectAsync(request.Host, request.Port, cancellationToken)
-                    .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
-            }
+            await ConnectUpstreamAsync(upstream, request, isMapped, mapping, cancellationToken);
         }
         catch (Exception ex) when (ex is SocketException or TimeoutException)
         {
@@ -143,6 +123,33 @@ internal sealed class ProxyConnectionHandler
         }
 
         await RelayBidirectionalAsync(clientStream, upstreamStream, cancellationToken);
+    }
+
+    private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, bool isMapped, HostMapping? mapping, CancellationToken cancellationToken)
+    {
+        if (isMapped)
+        {
+            var destinationAddress = mapping!.Address;
+            var destinationPort = mapping.Port ?? request.Port;
+
+            if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
+            {
+                Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{destinationPort}");
+            }
+
+            await upstream.ConnectAsync(destinationAddress, destinationPort, cancellationToken)
+                .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
+
+            return;
+        }
+
+        if (_logMode == ConnectionLogMode.All)
+        {
+            Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> DNS");
+        }
+
+        await upstream.ConnectAsync(request.Host, request.Port, cancellationToken)
+            .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
     }
 
     private static async Task RelayBidirectionalAsync(NetworkStream client, NetworkStream upstream, CancellationToken cancellationToken)
