@@ -20,4 +20,9 @@ using System.Net;
 
 namespace ProxiedHosts.Hosts;
 
-internal sealed record HostMapping(string Hostname, IPAddress Address, int? Port = null);
+internal sealed record HostMapping(
+    string Hostname,
+    IPAddress Address,
+    int? Port = null,
+    int? MatchPort = null
+);

@@ -59,9 +59,18 @@ internal sealed class HostMappingProvider : IDisposable
         _watcher.EnableRaisingEvents = true;
     }
 
-    public bool TryResolve(string hostname, out HostMapping mapping)
+    public bool TryResolve(string hostname, int port, out HostMapping mapping)
     {
-        return _mappings.TryGetValue(NormalizeHost(hostname), out mapping!);
+        var host = NormalizeHost(hostname);
+
+        // Port-specific mapping has priority.
+        if (_mappings.TryGetValue(GetMappingKey(host, port), out mapping!))
+        {
+            return true;
+        }
+
+        // Fall back to a hostname-only mapping.
+        return _mappings.TryGetValue(host, out mapping!);
     }
 
     private void OnFileChanged(object sender, FileSystemEventArgs e)
@@ -128,15 +137,14 @@ internal sealed class HostMappingProvider : IDisposable
 
                     for (var j = 1; j < parts.Length; j++)
                     {
-                        var host = NormalizeHost(parts[j]);
-
-                        if (host.Length == 0)
+                        if (!TryParseHost(parts[j], out var host, out var matchPort))
                         {
-                            Console.Error.WriteLine($"Ignoring invalid empty hostname on line {i + 1}.");
+                            Console.Error.WriteLine($"Ignoring invalid hostname or port '{parts[j]}' on line {i + 1}.");
+
                             continue;
                         }
 
-                        nextMappings[host] = new HostMapping(host, ip!, port);
+                        nextMappings[GetMappingKey(host, matchPort)] = new HostMapping(host, ip!, port, matchPort);
                     }
                 }
 
@@ -154,6 +162,54 @@ internal sealed class HostMappingProvider : IDisposable
                 Console.Error.WriteLine($"Could not access hosts file: {ex.Message}");
             }
         }
+    }
+
+    private static bool TryParseHost(string value, out string host, out int? port)
+    {
+        host = string.Empty;
+        port = null;
+
+        // Bracketed IPv6, optionally with a port:
+        // [::1]
+        // [::1]:443
+        if (value.StartsWith('['))
+        {
+            var closingBracket = value.IndexOf(']');
+
+            if (closingBracket <= 1)
+            {
+                return false;
+            }
+
+            host = NormalizeHost(value[1..closingBracket]);
+
+            if (closingBracket == value.Length - 1)
+            {
+                return host.Length > 0;
+            }
+
+            if (value[closingBracket + 1] != ':')
+            {
+                return false;
+            }
+
+            return TryParsePort(value[(closingBracket + 2)..], out port);
+        }
+
+        var firstColon = value.IndexOf(':');
+        var lastColon = value.LastIndexOf(':');
+
+        // Exactly one colon means hostname:port.
+        if (firstColon > 0 && firstColon == lastColon)
+        {
+            host = NormalizeHost(value[..firstColon]);
+
+            return host.Length > 0 && TryParsePort(value[(firstColon + 1)..], out port);
+        }
+
+        // No colon, or an unbracketed IPv6 literal without a port.
+        host = NormalizeHost(value);
+        return host.Length > 0;
     }
 
     private static bool TryParseEndpoint(string value, out IPAddress? address, out int? port)
@@ -225,6 +281,15 @@ internal sealed class HostMappingProvider : IDisposable
         return true;
     }
 
+    private static string GetMappingKey(string hostname, int? port)
+    {
+        var host = NormalizeHost(hostname);
+
+        return port.HasValue
+            ? $"{host}|{port.Value}"
+            : host;
+    }
+
     private static string NormalizeHost(string host) => host.Trim().TrimEnd('.');
 
     private void EnsureFileExists()
@@ -236,12 +301,28 @@ internal sealed class HostMappingProvider : IDisposable
 
         const string template = """
                                 # proxiedhosts.txt
-                                # Format: <ip-address>[:port] <hostname> [hostname2 ...]
+                                #
+                                # Format:
+                                # <ip-address>[:destination-port] <hostname>[:match-port] [hostname2[:match-port] ...]
                                 #
                                 # Examples:
+                                #
+                                # Map all ports and preserve the requested port:
                                 # 127.0.0.1 myapp.local
+                                #
+                                # Map all ports to a fixed destination port:
                                 # 127.0.0.1:8080 myapp.local
-                                # 192.168.1.50:8443 api.example.com
+                                #
+                                # Match only requests for port 443 and preserve port 443:
+                                # 192.168.1.50 api.example.com:443
+                                #
+                                # Match only requests for port 443 and redirect them to port 8443:
+                                # 192.168.1.50:8443 api.example.com:443
+                                #
+                                # Multiple hostnames may be listed on one line:
+                                # 127.0.0.1:5000 app.local:80 api.local:8080
+                                #
+                                # IPv6 addresses with destination ports must use brackets:
                                 # [::1]:8080 ipv6.example.com
                                 """;
 
