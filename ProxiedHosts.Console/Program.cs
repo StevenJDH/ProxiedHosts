@@ -41,6 +41,8 @@ internal static class Program
             var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, configuration.ConnectionLogMode, logger);
             var proxy = new ProxyServer(configuration.ListenAddress, port, connectionHandler);
 
+            hostMappings.MappingsReloaded += connectionHandler.DisconnectChangedConnections;
+
             SystemConsole.CancelKeyPress += (_, e) =>
             {
                 // Prevent the runtime from terminating immediately so
@@ -57,6 +59,7 @@ internal static class Program
 
             proxyState.Changed += active =>
             {
+                connectionHandler.DisconnectChangedConnections();
                 SystemConsole.WriteLine(active ? "Proxy mappings activated." : "Proxy mappings deactivated. Traffic will use normal DNS.");
             };
 

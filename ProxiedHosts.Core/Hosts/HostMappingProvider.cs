@@ -32,6 +32,7 @@ public sealed class HostMappingProvider : IDisposable
     private readonly FileSystemWatcher _watcher;
     private readonly Timer _reloadTimer;
     private bool _disposed;
+    public event Action? MappingsReloaded;
 
     private volatile Dictionary<string, HostMapping> _mappings = new(StringComparer.OrdinalIgnoreCase);
 
@@ -155,6 +156,8 @@ public sealed class HostMappingProvider : IDisposable
                 _mappings = nextMappings;
 
                 _logger.Information($"[{DateTimeOffset.Now:T}] Loaded {_mappings.Count} host mapping(s).");
+
+                MappingsReloaded?.Invoke();
             }
             catch (IOException ex)
             {

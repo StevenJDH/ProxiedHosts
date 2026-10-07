@@ -22,7 +22,8 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 - Binds only to `127.0.0.1`.
 - Generates a random port on first run and persists it for later runs.
 - Hot-reloads `proxiedhosts.txt` when it changes.
-- Keeps the previous valid mapping if a reload contains an error.
+- Automatically closes only affected connections when mappings change without disrupting unrelated traffic.
+- Keeps the previous valid mappings and ignores the invalid ones when reloading.
 - Automatic fallback to normal DNS resolution for unmapped hosts.
 - No administrator privileges required for normal operation.
 - No modification of the system hosts file.

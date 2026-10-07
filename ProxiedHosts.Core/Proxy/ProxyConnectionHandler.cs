@@ -19,6 +19,8 @@
 using ProxiedHosts.Core.Hosts;
 using ProxiedHosts.Core.Logging;
 using System.Buffers;
+using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
@@ -26,14 +28,27 @@ namespace ProxiedHosts.Core.Proxy;
 
 public sealed class ProxyConnectionHandler
 {
-    private const int MaxHeaderBytes = 64 * 1024;
+    private sealed record ConnectionRoute(
+        bool IsMapped,
+        IPAddress? DestinationAddress,
+        int DestinationPort);
 
+    private sealed record ActiveConnection(
+        TcpClient Client,
+        TcpClient Upstream,
+        string Host,
+        int Port,
+        ConnectionRoute Route);
+
+    private const int MaxHeaderBytes = 64 * 1024;
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
 
     private readonly HostMappingProvider _hostMappings;
     private readonly ProxyState _proxyState;
     private readonly ConnectionLogMode _logMode;
     private readonly IProxyLogger _logger;
+
+    private readonly ConcurrentDictionary<TcpClient, ActiveConnection> _activeConnections = new();
 
     public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly, IProxyLogger? logger = null)
     {
@@ -71,6 +86,10 @@ public sealed class ProxyConnectionHandler
             {
                 _logger.Error($"[{DateTimeOffset.Now:T}] Client error: {ex.Message}");
             }
+            finally
+            {
+                _activeConnections.TryRemove(client, out _);
+            }
         }
     }
 
@@ -93,17 +112,18 @@ public sealed class ProxyConnectionHandler
             return;
         }
 
-        HostMapping? mapping = null;
-        var isMapped = _proxyState.IsActive && _hostMappings.TryResolve(request.Host, request.Port, out mapping);
+        var route = ResolveRoute(request.Host, request.Port);
 
         using var upstream = new TcpClient
         {
             NoDelay = true
         };
 
+        _activeConnections[client] = new ActiveConnection(client, upstream, request.Host, request.Port, route);
+
         try
         {
-            await ConnectUpstreamAsync(upstream, request, isMapped, mapping, cancellationToken);
+            await ConnectUpstreamAsync(upstream, request, route, cancellationToken);
         }
         catch (Exception ex) when (ex is SocketException or TimeoutException)
         {
@@ -130,19 +150,16 @@ public sealed class ProxyConnectionHandler
         await RelayBidirectionalAsync(clientStream, upstreamStream, cancellationToken);
     }
 
-    private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, bool isMapped, HostMapping? mapping, CancellationToken cancellationToken)
+    private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, CancellationToken cancellationToken)
     {
-        if (isMapped)
+        if (route.IsMapped)
         {
-            var destinationAddress = mapping!.Address;
-            var destinationPort = mapping.Port ?? request.Port;
-
             if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
             {
-                _logger.Information($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{destinationPort}");
+                _logger.Information($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {route.DestinationAddress}:{route.DestinationPort}");
             }
 
-            await upstream.ConnectAsync(destinationAddress, destinationPort, cancellationToken)
+            await upstream.ConnectAsync(route.DestinationAddress!, route.DestinationPort, cancellationToken)
                 .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
 
             return;
@@ -224,5 +241,51 @@ public sealed class ProxyConnectionHandler
 
         await stream.WriteAsync(header, cancellationToken);
         await stream.WriteAsync(body, cancellationToken);
+    }
+
+    private ConnectionRoute ResolveRoute(string host, int port)
+    {
+        if (_proxyState.IsActive && _hostMappings.TryResolve(host, port, out var mapping))
+        {
+            return new ConnectionRoute(true, mapping.Address, mapping.Port ?? port);
+        }
+
+        return new ConnectionRoute(false, null, port);
+    }
+
+    private bool HasRouteChanged(ActiveConnection connection)
+    {
+        var currentRoute = ResolveRoute(connection.Host, connection.Port);
+
+        return currentRoute != connection.Route;
+    }
+
+    public void DisconnectChangedConnections()
+    {
+        foreach (var connection in _activeConnections.Values)
+        {
+            if (!HasRouteChanged(connection))
+            {
+                continue;
+            }
+
+            try
+            {
+                connection.Client.Close();
+            }
+            catch
+            {
+                // Connection may already be closed.
+            }
+
+            try
+            {
+                connection.Upstream.Close();
+            }
+            catch
+            {
+                // Connection may already be closed.
+            }
+        }
     }
 }
