@@ -51,7 +51,7 @@ On later runs, the same port is reused. If another process is already using that
 
 ## Mapping file syntax
 
-**Format:** `<ip-address>[:port] <hostname> [hostname2 ...]`
+**Format:** `<ip-address>[:destination-port] <hostname>[:match-port] [hostname2[:match-port] ...]`
 
 The syntax is similar to the operating-system hosts file:
 
@@ -72,6 +72,8 @@ Additionally, entries with ports are supported, which isn´t possible with the s
 ```text
 127.0.0.1:8080 myapp.local
 192.168.1.50:8443 api.example.com
+192.168.1.50:8443 api.example.com:443
+127.0.0.1:5000 app.local:80 api.local:8080
 [::1]:8080 ipv6.example.com
 ```
 
