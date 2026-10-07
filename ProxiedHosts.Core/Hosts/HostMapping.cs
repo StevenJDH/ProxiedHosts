@@ -24,5 +24,4 @@ public sealed record HostMapping(
     string Hostname,
     IPAddress Address,
     int? Port = null,
-    int? MatchPort = null
-);
+    int? MatchPort = null);

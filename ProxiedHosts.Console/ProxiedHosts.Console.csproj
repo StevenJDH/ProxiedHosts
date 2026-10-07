@@ -14,4 +14,10 @@
 		<ProjectReference Include="..\ProxiedHosts.Core\ProxiedHosts.Core.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <None Update="proxiedhosts.txt">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
 </Project>
