@@ -1,0 +1,24 @@
+# proxiedhosts.txt
+#
+# Format:
+# <ip-address>[:destination-port] <hostname>[:match-port] [hostname2[:match-port] ...]
+#
+# Examples:
+#
+# Map all ports and preserve the requested port:
+# 127.0.0.1 myapp.local
+#
+# Map all ports to a fixed destination port:
+# 127.0.0.1:8080 myapp.local
+#
+# Match only requests for port 443 and preserve port 443:
+# 192.168.1.50 api.example.com:443
+#
+# Match only requests for port 443 and redirect them to port 8443:
+# 192.168.1.50:8443 api.example.com:443
+#
+# Multiple hostnames may be listed on one line:
+# 127.0.0.1:5000 app.local:80 api.local:8080
+#
+# IPv6 addresses with destination ports must use brackets:
+# [::1]:8080 ipv6.example.com

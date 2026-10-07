@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<PublishAot>true</PublishAot>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<RootNamespace>ProxiedHosts.Console</RootNamespace>
+		<AssemblyName>proxiedhosts</AssemblyName>
+		<!-- Set as false to see full analysis details. Default is true. -->
+		<TrimmerSingleWarn>true</TrimmerSingleWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\ProxiedHosts.Core\ProxiedHosts.Core.csproj" />
+	</ItemGroup>
+
+</Project>

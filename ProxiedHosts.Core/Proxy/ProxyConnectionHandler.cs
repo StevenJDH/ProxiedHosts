@@ -16,14 +16,15 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using ProxiedHosts.Hosts;
+using ProxiedHosts.Core.Hosts;
+using ProxiedHosts.Core.Logging;
 using System.Buffers;
 using System.Net.Sockets;
 using System.Text;
 
-namespace ProxiedHosts.Proxy;
+namespace ProxiedHosts.Core.Proxy;
 
-internal sealed class ProxyConnectionHandler
+public sealed class ProxyConnectionHandler
 {
     private const int MaxHeaderBytes = 64 * 1024;
 
@@ -32,12 +33,14 @@ internal sealed class ProxyConnectionHandler
     private readonly HostMappingProvider _hostMappings;
     private readonly ProxyState _proxyState;
     private readonly ConnectionLogMode _logMode;
+    private readonly IProxyLogger _logger;
 
-    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly)
+    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly, IProxyLogger? logger = null)
     {
         _hostMappings = hostMappings;
         _proxyState = proxyState;
         _logMode = logMode;
+        _logger = logger ?? NullProxyLogger.Instance;
     }
 
     public async Task HandleClientSafelyAsync(TcpClient client, CancellationToken cancellationToken)
@@ -66,7 +69,7 @@ internal sealed class ProxyConnectionHandler
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[{DateTimeOffset.Now:T}] Client error: {ex.Message}");
+                _logger.Error($"[{DateTimeOffset.Now:T}] Client error: {ex.Message}");
             }
         }
     }
@@ -114,11 +117,13 @@ internal sealed class ProxyConnectionHandler
         if (request.IsConnect)
         {
             var established = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ProxiedHosts\r\n\r\n");
+
             await clientStream.WriteAsync(established, cancellationToken);
         }
         else
         {
             var rewrittenHeader = ProxyRequest.RewriteForOriginServer(requestHeader, request);
+
             await upstreamStream.WriteAsync(rewrittenHeader, cancellationToken);
         }
 
@@ -134,7 +139,7 @@ internal sealed class ProxyConnectionHandler
 
             if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
             {
-                Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{destinationPort}");
+                _logger.Information($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {destinationAddress}:{destinationPort}");
             }
 
             await upstream.ConnectAsync(destinationAddress, destinationPort, cancellationToken)
@@ -145,7 +150,7 @@ internal sealed class ProxyConnectionHandler
 
         if (_logMode == ConnectionLogMode.All)
         {
-            Console.WriteLine($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> DNS");
+            _logger.Information($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> DNS");
         }
 
         await upstream.ConnectAsync(request.Host, request.Port, cancellationToken)

@@ -19,9 +19,9 @@
 using System.Net;
 using System.Net.Sockets;
 
-namespace ProxiedHosts.Proxy;
+namespace ProxiedHosts.Core.Proxy;
 
-internal sealed class ProxyServer
+public sealed class ProxyServer
 {
     private readonly TcpListener _listener;
     private readonly ProxyConnectionHandler _connectionHandler;

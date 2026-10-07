@@ -16,17 +16,19 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using ProxiedHosts.Core.Logging;
 using System.Net;
 using System.Text;
 
-namespace ProxiedHosts.Hosts;
+namespace ProxiedHosts.Core.Hosts;
 
-internal sealed class HostMappingProvider : IDisposable
+public sealed class HostMappingProvider : IDisposable
 {
     private readonly Lock _watcherGate = new();
     private readonly Lock _reloadGate = new();
 
     private readonly string _filePath;
+    private readonly IProxyLogger _logger;
     private readonly FileSystemWatcher _watcher;
     private readonly Timer _reloadTimer;
     private bool _disposed;
@@ -35,9 +37,10 @@ internal sealed class HostMappingProvider : IDisposable
 
     public int Count => _mappings.Count;
 
-    public HostMappingProvider(string filePath)
+    public HostMappingProvider(string filePath, IProxyLogger? logger = null)
     {
         _filePath = filePath;
+        _logger = logger ?? NullProxyLogger.Instance;
 
         EnsureFileExists();
         Reload();
@@ -97,7 +100,7 @@ internal sealed class HostMappingProvider : IDisposable
             {
                 if (!File.Exists(_filePath))
                 {
-                    Console.Error.WriteLine($"Hosts file not found: {_filePath}");
+                    _logger.Error($"Hosts file not found: {_filePath}");
 
                     return;
                 }
@@ -125,13 +128,13 @@ internal sealed class HostMappingProvider : IDisposable
 
                     if (parts.Length < 2)
                     {
-                        Console.Error.WriteLine($"Ignoring invalid hosts entry on line {i + 1}: expected '<ip> <hostname>'.");
+                        _logger.Warning($"Ignoring invalid hosts entry on line {i + 1}: expected '<ip> <hostname>'.");
                         continue;
                     }
 
                     if (!TryParseEndpoint(parts[0], out var ip, out var port))
                     {
-                        Console.Error.WriteLine($"Ignoring invalid IP address or port '{parts[0]}' on line {i + 1}.");
+                        _logger.Warning($"Ignoring invalid IP address or port '{parts[0]}' on line {i + 1}.");
                         continue;
                     }
 
@@ -139,7 +142,7 @@ internal sealed class HostMappingProvider : IDisposable
                     {
                         if (!TryParseHost(parts[j], out var host, out var matchPort))
                         {
-                            Console.Error.WriteLine($"Ignoring invalid hostname or port '{parts[j]}' on line {i + 1}.");
+                            _logger.Warning($"Ignoring invalid hostname or port '{parts[j]}' on line {i + 1}.");
 
                             continue;
                         }
@@ -151,15 +154,15 @@ internal sealed class HostMappingProvider : IDisposable
                 // Atomic publication of the completely parsed snapshot.
                 _mappings = nextMappings;
 
-                Console.WriteLine($"[{DateTimeOffset.Now:T}] Loaded {_mappings.Count} host mapping(s).");
+                _logger.Information($"[{DateTimeOffset.Now:T}] Loaded {_mappings.Count} host mapping(s).");
             }
             catch (IOException ex)
             {
-                Console.Error.WriteLine($"Could not reload hosts file: {ex.Message}");
+                _logger.Error($"Could not reload hosts file: {ex.Message}");
             }
             catch (UnauthorizedAccessException ex)
             {
-                Console.Error.WriteLine($"Could not access hosts file: {ex.Message}");
+                _logger.Error($"Could not access hosts file: {ex.Message}");
             }
         }
     }
@@ -327,7 +330,7 @@ internal sealed class HostMappingProvider : IDisposable
                                 """;
 
         File.WriteAllText(_filePath, template, Encoding.UTF8);
-        Console.WriteLine($"Created {_filePath}");
+        _logger.Information($"Created {_filePath}");
     }
 
     public void Dispose()

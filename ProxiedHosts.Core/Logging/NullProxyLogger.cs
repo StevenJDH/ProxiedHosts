@@ -1,4 +1,4 @@
-/*
+﻿/*
  * This file is part of ProxiedHosts <https://github.com/StevenJDH/ProxiedHosts>.
  * Copyright (C) 2026 Steven Jenkins De Haro.
  *
@@ -16,18 +16,25 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using ProxiedHosts.Proxy;
-using System.Net;
+namespace ProxiedHosts.Core.Logging;
 
-namespace ProxiedHosts.Configuration;
-
-internal sealed record ProxyConfiguration(string ApplicationName, IPAddress ListenAddress, string HostsFilePath, ConnectionLogMode ConnectionLogMode)
+public sealed class NullProxyLogger : IProxyLogger
 {
-    public static ProxyConfiguration Load()
+    public static NullProxyLogger Instance { get; } = new();
+
+    private NullProxyLogger()
     {
-        return new ProxyConfiguration(ApplicationName: "ProxiedHosts",
-                                      ListenAddress: IPAddress.Loopback,
-                                      HostsFilePath: Path.Combine(AppContext.BaseDirectory, "proxiedhosts.txt"),
-                                      ConnectionLogMode: ConnectionLogMode.MappedOnly);
+    }
+
+    public void Information(string message)
+    {
+    }
+
+    public void Warning(string message)
+    {
+    }
+
+    public void Error(string message)
+    {
     }
 }

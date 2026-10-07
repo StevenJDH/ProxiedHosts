@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>ProxiedHosts.Core</RootNamespace>
+		<IsAotCompatible>true</IsAotCompatible>
+		<Description>Core proxy and host-mapping functionality for ProxiedHosts.</Description>
+	</PropertyGroup>
+</Project>

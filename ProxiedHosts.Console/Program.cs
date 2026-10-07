@@ -1,4 +1,4 @@
-/*
+﻿/*
  * This file is part of ProxiedHosts <https://github.com/StevenJDH/ProxiedHosts>.
  * Copyright (C) 2026 Steven Jenkins De Haro.
  *
@@ -16,12 +16,13 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using ProxiedHosts.Configuration;
-using ProxiedHosts.Hosts;
-using ProxiedHosts.Infrastructure;
-using ProxiedHosts.Proxy;
+using ProxiedHosts.Core.Configuration;
+using ProxiedHosts.Core.Hosts;
+using ProxiedHosts.Core.Infrastructure;
+using ProxiedHosts.Core.Proxy;
+using SystemConsole = System.Console;
 
-namespace ProxiedHosts;
+namespace ProxiedHosts.Console;
 
 internal static class Program
 {
@@ -31,15 +32,16 @@ internal static class Program
 
         try
         {
+            var logger = new ConsoleProxyLogger();
             var configuration = ProxyConfiguration.Load();
-            using var hostMappings = new HostMappingProvider(configuration.HostsFilePath);
+            using var hostMappings = new HostMappingProvider(configuration.HostsFilePath, logger);
             var portProvider = new PortProvider(configuration.ApplicationName);
             var port = await portProvider.GetOrCreateAvailablePortAsync(shutdown.Token);
             var proxyState = new ProxyState();
-            var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, configuration.ConnectionLogMode);
+            var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, configuration.ConnectionLogMode, logger);
             var proxy = new ProxyServer(configuration.ListenAddress, port, connectionHandler);
 
-            Console.CancelKeyPress += (_, e) =>
+            SystemConsole.CancelKeyPress += (_, e) =>
             {
                 // Prevent the runtime from terminating immediately so
                 // resources can shut down cleanly.
@@ -47,35 +49,35 @@ internal static class Program
 
                 if (!shutdown.IsCancellationRequested)
                 {
-                    Console.WriteLine();
-                    Console.WriteLine("Stopping proxy...");
+                    SystemConsole.WriteLine();
+                    SystemConsole.WriteLine("Stopping proxy...");
                     shutdown.Cancel();
                 }
             };
 
             proxyState.Changed += active =>
             {
-                Console.WriteLine(active ? "Proxy mappings activated." : "Proxy mappings deactivated. Traffic will use normal DNS.");
+                SystemConsole.WriteLine(active ? "Proxy mappings activated." : "Proxy mappings deactivated. Traffic will use normal DNS.");
             };
 
-            Console.WriteLine();
-            Console.WriteLine("ProxiedHosts");
-            Console.WriteLine("------------------");
-            Console.WriteLine($"Proxy      : http://127.0.0.1:{port}");
-            Console.WriteLine($"Port       : {port} (stable and persisted)");
-            Console.WriteLine($"Mappings   : {hostMappings.Count}");
-            Console.WriteLine($"Status     : {(proxyState.IsActive ? "Active" : "Inactive")}");
-            Console.WriteLine();
-            Console.WriteLine("Configure your application to use the proxy above for HTTP and HTTPS.");
-            Console.WriteLine("HTTPS is tunneled with CONNECT; TLS is not decrypted or inspected.");
-            Console.WriteLine();
-            Console.WriteLine("P = toggle proxy mappings");
-            Console.WriteLine("Q / Ctrl+C = quit");
-            Console.WriteLine();
+            SystemConsole.WriteLine();
+            SystemConsole.WriteLine("ProxiedHosts");
+            SystemConsole.WriteLine("------------------");
+            SystemConsole.WriteLine($"Proxy      : http://127.0.0.1:{port}");
+            SystemConsole.WriteLine($"Port       : {port} (stable and persisted)");
+            SystemConsole.WriteLine($"Mappings   : {hostMappings.Count}");
+            SystemConsole.WriteLine($"Status     : {(proxyState.IsActive ? "Active" : "Inactive")}");
+            SystemConsole.WriteLine();
+            SystemConsole.WriteLine("Configure your application to use the proxy above for HTTP and HTTPS.");
+            SystemConsole.WriteLine("HTTPS is tunneled with CONNECT; TLS is not decrypted or inspected.");
+            SystemConsole.WriteLine();
+            SystemConsole.WriteLine("P = toggle proxy mappings");
+            SystemConsole.WriteLine("Q / Ctrl+C = quit");
+            SystemConsole.WriteLine();
 
             _ = Task.Run(() => RunInputLoop(proxyState, shutdown));
             await proxy.RunAsync(shutdown.Token);
-            Console.WriteLine("Proxy stopped.");
+            SystemConsole.WriteLine("Proxy stopped.");
 
             return 0;
         }
@@ -85,8 +87,8 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Fatal error: {ex.Message}");
-            Console.Error.WriteLine(ex);
+            SystemConsole.Error.WriteLine($"Fatal error: {ex.Message}");
+            SystemConsole.Error.WriteLine(ex);
             return 1;
         }
 
@@ -96,7 +98,7 @@ internal static class Program
     {
         while (!shutdown.IsCancellationRequested)
         {
-            var key = Console.ReadKey(intercept: true);
+            var key = SystemConsole.ReadKey(intercept: true);
 
             switch (key.Key)
             {
@@ -105,8 +107,8 @@ internal static class Program
                     break;
 
                 case ConsoleKey.Q:
-                    Console.WriteLine();
-                    Console.WriteLine("Stopping proxy...");
+                    SystemConsole.WriteLine();
+                    SystemConsole.WriteLine("Stopping proxy...");
                     shutdown.Cancel();
                     return;
             }

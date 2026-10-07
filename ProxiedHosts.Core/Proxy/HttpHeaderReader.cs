@@ -16,7 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace ProxiedHosts.Proxy;
+namespace ProxiedHosts.Core.Proxy;
 
 internal static class HttpHeaderReader
 {
@@ -29,6 +29,7 @@ internal static class HttpHeaderReader
         while (output.Length < maxBytes)
         {
             var read = await stream.ReadAsync(buffer, cancellationToken);
+
             if (read == 0)
             {
                 return output.Length == 0 ? null : throw new IOException("Connection closed before the HTTP header was complete.");
@@ -37,6 +38,7 @@ internal static class HttpHeaderReader
             for (var i = 0; i < read; i++)
             {
                 var b = buffer[i];
+
                 output.WriteByte(b);
 
                 var expected = matched switch
@@ -64,10 +66,8 @@ internal static class HttpHeaderReader
 
                     return output.ToArray();
                 }
-                else
-                {
-                    matched = b == (byte)'\r' ? 1 : 0;
-                }
+
+                matched = b == (byte)'\r' ? 1 : 0;
             }
         }
 

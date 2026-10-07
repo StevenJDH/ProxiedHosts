@@ -16,13 +16,13 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System.Net;
+namespace ProxiedHosts.Core.Logging;
 
-namespace ProxiedHosts.Hosts;
+public interface IProxyLogger
+{
+    void Information(string message);
 
-internal sealed record HostMapping(
-    string Hostname,
-    IPAddress Address,
-    int? Port = null,
-    int? MatchPort = null
-);
+    void Warning(string message);
+
+    void Error(string message);
+}

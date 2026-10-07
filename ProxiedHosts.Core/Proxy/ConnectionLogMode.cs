@@ -16,9 +16,9 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace ProxiedHosts.Proxy;
+namespace ProxiedHosts.Core.Proxy;
 
-internal enum ConnectionLogMode
+public enum ConnectionLogMode
 {
     None,
     MappedOnly,

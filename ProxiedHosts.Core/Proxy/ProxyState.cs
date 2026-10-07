@@ -16,7 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace ProxiedHosts.Proxy;
+namespace ProxiedHosts.Core.Proxy;
 
 /// <summary>
 /// Tracks whether custom proxy host mappings are currently active.
@@ -26,7 +26,7 @@ namespace ProxiedHosts.Proxy;
 /// The <see cref="Changed"/> event is raised only after a successful state change and
 /// executes on the thread that performed the toggle.
 /// </summary>
-internal sealed class ProxyState
+public sealed class ProxyState
 {
     private int _active = 1;
     public event Action<bool>? Changed;

@@ -1,7 +1,0 @@
-# proxiedhosts.txt
-# Format:
-#   <ip-address> <hostname> [hostname2 ...]
-#
-# Examples:
-# 127.0.0.1 myapp.local
-# 192.168.1.50 api.example.com

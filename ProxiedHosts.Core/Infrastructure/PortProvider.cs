@@ -20,9 +20,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 
-namespace ProxiedHosts.Infrastructure;
+namespace ProxiedHosts.Core.Infrastructure;
 
-internal sealed class PortProvider
+public sealed class PortProvider
 {
     private const int MinPort = 20000;
     private const int MaxPort = 45000;
@@ -38,6 +38,7 @@ internal sealed class PortProvider
         }
 
         var directory = Path.Combine(root, appName);
+
         Directory.CreateDirectory(directory);
         _portFile = Path.Combine(directory, "proxy.port");
     }
@@ -79,6 +80,7 @@ internal sealed class PortProvider
     private static bool IsPortAvailable(int port)
     {
         TcpListener? listener = null;
+
         try
         {
             listener = new TcpListener(IPAddress.Loopback, port);

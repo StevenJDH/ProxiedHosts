@@ -18,7 +18,7 @@
 
 using System.Text;
 
-namespace ProxiedHosts.Proxy;
+namespace ProxiedHosts.Core.Proxy;
 
 internal sealed record ProxyRequest(string Method, string Host, int Port, bool IsConnect, string? AbsoluteUri)
 {
@@ -31,6 +31,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         var headerEnd = headerText.IndexOf("\r\n\r\n", StringComparison.Ordinal);
         var headerOnly = headerEnd >= 0 ? headerText[..headerEnd] : headerText;
         var lines = headerOnly.Split("\r\n", StringSplitOptions.None);
+
         if (lines.Length == 0)
         {
             error = "Missing request line.";
@@ -38,6 +39,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         }
 
         var requestParts = lines[0].Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+
         if (requestParts.Length != 3)
         {
             error = "Invalid request line.";
@@ -63,6 +65,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         if (Uri.TryCreate(target, UriKind.Absolute, out var uri) && (uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) || uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
         {
             var port = uri.IsDefaultPort ? (uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? 443 : 80) : uri.Port;
+
             request = new ProxyRequest(method, uri.Host, port, false, uri.AbsoluteUri);
             return true;
         }
@@ -78,6 +81,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         }
 
         var hostValue = hostHeader[5..].Trim();
+
         if (!TryParseHostPort(hostValue, 80, out var host, out var hostPort))
         {
             error = "Invalid Host header.";
@@ -97,6 +101,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
 
         var headerText = Encoding.Latin1.GetString(rawHeader);
         var split = headerText.IndexOf("\r\n", StringComparison.Ordinal);
+
         if (split < 0)
         {
             return rawHeader;
@@ -104,6 +109,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
 
         var requestLine = headerText[..split];
         var parts = requestLine.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+
         if (parts.Length != 3)
         {
             return rawHeader;
