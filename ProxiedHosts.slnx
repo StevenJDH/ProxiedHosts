@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="ProxiedHosts.Console/ProxiedHosts.Console.csproj" Id="ee648fa1-c8e8-48b1-8045-01ebd4a73efd" />
   <Project Path="ProxiedHosts.Core/ProxiedHosts.Core.csproj" />
+  <Project Path="ProxiedHosts.Tray/ProxiedHosts.Tray.csproj" Id="999b6d6c-4e3f-4a01-9ad4-e5c648746b58" />
 </Solution>
