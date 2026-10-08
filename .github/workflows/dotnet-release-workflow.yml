@@ -31,6 +31,11 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   PROJECT_FILE: ProxiedHosts.Console/ProxiedHosts.Console.csproj
   APP_NAME: proxiedhosts
+  TRAY_PROJECT_FILE: ProxiedHosts.Tray/ProxiedHosts.Tray.csproj
+  TRAY_APP_NAME: proxiedhosts-tray
+  MACOS_APP_NAME: ProxiedHosts
+  MACOS_BUNDLE_ID: io.github.stevenjdh.proxiedhosts
+  MACOS_ICON_FILE: ProxiedHosts.Tray/Assets/ProxiedHosts.icns
 
 jobs:
   # ------------------------------------------------------------
@@ -146,10 +151,10 @@ jobs:
             runner: windows-11-arm
             os: windows
           - rid: linux-x64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
             os: linux
           - rid: linux-arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-26.04-arm
             os: linux
 
     runs-on: ${{ matrix.runner }}
@@ -168,7 +173,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
           restore-keys: ${{ runner.os }}-nuget
 
       # Native AOT on Linux requires the native compiler toolchain.
@@ -208,18 +213,6 @@ jobs:
           }
 
           Copy-Item $exe $bundle
-
-          $projectDirectory = Split-Path "${{ env.PROJECT_FILE }}"
-
-          if ([string]::IsNullOrWhiteSpace($projectDirectory)) {
-              $projectDirectory = "."
-          }
-
-          $hostsFile = Join-Path $projectDirectory "proxiedhosts.txt"
-
-          if (Test-Path $hostsFile) {
-              Copy-Item $hostsFile $bundle
-          }
 
           if (Test-Path "README.md") {
               Copy-Item "README.md" $bundle
@@ -263,10 +256,6 @@ jobs:
 
           PROJECT_DIRECTORY="$(dirname "${PROJECT_FILE}")"
 
-          if [[ -f "${PROJECT_DIRECTORY}/proxiedhosts.txt" ]]; then
-            cp "${PROJECT_DIRECTORY}/proxiedhosts.txt" bundle/
-          fi
-
           [[ -f README.md ]] && cp README.md bundle/
           [[ -f LICENSE ]] && cp LICENSE bundle/
 
@@ -279,6 +268,145 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.rid }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ------------------------------------------------------------
+  # Tray - Windows + Linux
+  # ------------------------------------------------------------
+  publish-tray:
+    name: Tray AOT - ${{ matrix.rid }}
+    needs: prepare
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            runner: windows-latest
+            os: windows
+          - rid: win-arm64
+            runner: windows-11-arm
+            os: windows
+          - rid: linux-x64
+            runner: ubuntu-latest
+            os: linux
+          - rid: linux-arm64
+            runner: ubuntu-26.04-arm
+            os: linux
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget
+
+      - name: Install Linux Native AOT prerequisites
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish Tray Native AOT
+        run: >
+          dotnet publish "${{ env.TRAY_PROJECT_FILE }}"
+          --configuration Release
+          --runtime "${{ matrix.rid }}"
+          --self-contained true
+          -p:PublishAot=true
+          -p:Version="${{ needs.prepare.outputs.package_version }}"
+          -p:AssemblyVersion="${{ needs.prepare.outputs.assembly_version }}"
+          -p:FileVersion="${{ needs.prepare.outputs.file_version }}"
+          -o "publish/tray/${{ matrix.rid }}"
+
+      # ----------------------------------------------------------
+      # Windows Tray package
+      # ----------------------------------------------------------
+      - name: Create Windows Tray release package
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $bundle = "bundle-tray"
+          New-Item -ItemType Directory -Force -Path $bundle | Out-Null
+
+          $publishDirectory = "publish/tray/${{ matrix.rid }}"
+          $exe = Join-Path $publishDirectory "${{ env.TRAY_APP_NAME }}.exe"
+
+          if (-not (Test-Path $exe)) {
+              throw "Expected executable was not produced: $exe"
+          }
+
+          # Avalonia may require additional native files from the
+          # publish directory, so package the complete output.
+          Copy-Item "$publishDirectory/*" $bundle -Recurse
+
+          if (Test-Path "README.md") {
+              Copy-Item "README.md" $bundle
+          }
+
+          if (Test-Path "LICENSE") {
+              Copy-Item "LICENSE" $bundle
+          }
+
+          $releaseDir = "release-assets"
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+
+          $archive = Join-Path `
+              $releaseDir `
+              "proxiedhosts-tray-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.zip"
+
+          Compress-Archive `
+              -Path "$bundle/*" `
+              -DestinationPath $archive
+
+      # ----------------------------------------------------------
+      # Linux Tray package
+      # ----------------------------------------------------------
+      - name: Create Linux Tray release package
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p bundle-tray release-assets
+
+          PUBLISH_DIRECTORY="publish/tray/${{ matrix.rid }}"
+          BINARY="${PUBLISH_DIRECTORY}/${TRAY_APP_NAME}"
+
+          if [[ ! -f "$BINARY" ]]; then
+            echo "::error::Expected executable was not produced: $BINARY"
+            exit 1
+          fi
+
+          cp -a "${PUBLISH_DIRECTORY}/." bundle-tray/
+          chmod +x "bundle-tray/${TRAY_APP_NAME}"
+
+          [[ -f README.md ]] && cp README.md bundle-tray/
+          [[ -f LICENSE ]] && cp LICENSE bundle-tray/
+
+          tar \
+            -C bundle-tray \
+            -czf "release-assets/proxiedhosts-tray-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.tar.gz" \
+            .
+
+      - name: Upload Tray release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-tray-${{ matrix.rid }}
           path: release-assets/*
           if-no-files-found: error
           retention-days: 1
@@ -302,6 +430,13 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: macos-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: macos-nuget
 
       - name: Publish macOS arm64
         shell: bash
@@ -380,10 +515,6 @@ jobs:
 
           PROJECT_DIRECTORY="$(dirname "${PROJECT_FILE}")"
 
-          if [[ -f "${PROJECT_DIRECTORY}/proxiedhosts.txt" ]]; then
-            cp "${PROJECT_DIRECTORY}/proxiedhosts.txt" bundle/
-          fi
-
           [[ -f README.md ]] && cp README.md bundle/
           [[ -f LICENSE ]] && cp LICENSE bundle/
 
@@ -401,6 +532,311 @@ jobs:
           retention-days: 1
 
   # ------------------------------------------------------------
+  # Tray - macOS Universal App Bundle
+  # ------------------------------------------------------------
+  publish-tray-macos:
+    name: Tray AOT - macOS Universal
+    needs: prepare
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: macos-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: macos-nuget
+
+      # ----------------------------------------------------------
+      # Publish both macOS architectures.
+      # ----------------------------------------------------------
+      - name: Publish macOS arm64
+        shell: bash
+        run: |
+          dotnet publish "${TRAY_PROJECT_FILE}" \
+            --configuration Release \
+            --runtime osx-arm64 \
+            --self-contained true \
+            -p:PublishAot=true \
+            -p:UseAppHost=true \
+            -p:Version="${{ needs.prepare.outputs.package_version }}" \
+            -p:AssemblyVersion="${{ needs.prepare.outputs.assembly_version }}" \
+            -p:FileVersion="${{ needs.prepare.outputs.file_version }}" \
+            -o publish/tray/osx-arm64
+
+      - name: Publish macOS x64
+        shell: bash
+        run: |
+          dotnet publish "${TRAY_PROJECT_FILE}" \
+            --configuration Release \
+            --runtime osx-x64 \
+            --self-contained true \
+            -p:PublishAot=true \
+            -p:UseAppHost=true \
+            -p:Version="${{ needs.prepare.outputs.package_version }}" \
+            -p:AssemblyVersion="${{ needs.prepare.outputs.assembly_version }}" \
+            -p:FileVersion="${{ needs.prepare.outputs.file_version }}" \
+            -o publish/tray/osx-x64
+
+      # ----------------------------------------------------------
+      # Build ProxiedHosts.app and merge all Mach-O files.
+      # ----------------------------------------------------------
+      - name: Create universal macOS app bundle
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          PACKAGE_VERSION: ${{ needs.prepare.outputs.package_version }}
+        run: |
+          set -euo pipefail
+
+          ARM_DIR="publish/tray/osx-arm64"
+          X64_DIR="publish/tray/osx-x64"
+
+          APP_BUNDLE="bundle/${MACOS_APP_NAME}.app"
+          CONTENTS_DIR="${APP_BUNDLE}/Contents"
+          MACOS_DIR="${CONTENTS_DIR}/MacOS"
+          RESOURCES_DIR="${CONTENTS_DIR}/Resources"
+
+          if [[ ! -f "${ARM_DIR}/${TRAY_APP_NAME}" ]]; then
+            echo "::error::Missing arm64 executable: ${ARM_DIR}/${TRAY_APP_NAME}"
+            exit 1
+          fi
+
+          if [[ ! -f "${X64_DIR}/${TRAY_APP_NAME}" ]]; then
+            echo "::error::Missing x64 executable: ${X64_DIR}/${TRAY_APP_NAME}"
+            exit 1
+          fi
+
+          if [[ ! -f "${MACOS_ICON_FILE}" ]]; then
+            echo "::error::Missing macOS icon: ${MACOS_ICON_FILE}"
+            exit 1
+          fi
+
+          rm -rf bundle
+          mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
+
+          # Start with the arm64 publish output. Non-Mach-O resources
+          # are architecture-independent and can be copied directly.
+          cp -a "${ARM_DIR}/." "${MACOS_DIR}/"
+
+          # Merge every Mach-O file that has arm64/x64 counterparts.
+          while IFS= read -r -d '' ARM_FILE; do
+            if ! file "${ARM_FILE}" | grep -q "Mach-O"; then
+              continue
+            fi
+
+            RELATIVE_PATH="${ARM_FILE#${ARM_DIR}/}"
+            X64_FILE="${X64_DIR}/${RELATIVE_PATH}"
+            OUTPUT_FILE="${MACOS_DIR}/${RELATIVE_PATH}"
+
+            if [[ ! -f "${X64_FILE}" ]]; then
+              echo "::error::Missing x64 counterpart for Mach-O file: ${RELATIVE_PATH}"
+              exit 1
+            fi
+
+            ARM_ARCHS="$(lipo -archs "${ARM_FILE}")"
+            X64_ARCHS="$(lipo -archs "${X64_FILE}")"
+
+            # Some dependencies may already be universal.
+            if [[ "${ARM_ARCHS}" == *"arm64"* &&
+                  "${ARM_ARCHS}" == *"x86_64"* ]]; then
+              cp "${ARM_FILE}" "${OUTPUT_FILE}"
+              continue
+            fi
+
+            if [[ "${X64_ARCHS}" == *"arm64"* &&
+                  "${X64_ARCHS}" == *"x86_64"* ]]; then
+              cp "${X64_FILE}" "${OUTPUT_FILE}"
+              continue
+            fi
+
+            if [[ "${ARM_ARCHS}" != *"arm64"* ]]; then
+              echo "::error::Expected arm64 architecture in: ${RELATIVE_PATH}"
+              exit 1
+            fi
+
+            if [[ "${X64_ARCHS}" != *"x86_64"* ]]; then
+              echo "::error::Expected x86_64 architecture in: ${RELATIVE_PATH}"
+              exit 1
+            fi
+
+            lipo \
+              -create \
+              "${ARM_FILE}" \
+              "${X64_FILE}" \
+              -output "${OUTPUT_FILE}"
+          done < <(find "${ARM_DIR}" -type f -print0)
+
+          chmod +x "${MACOS_DIR}/${TRAY_APP_NAME}"
+
+          cp \
+            "${MACOS_ICON_FILE}" \
+            "${RESOURCES_DIR}/ProxiedHosts.icns"
+
+          # Your release version is 1.0.0.26101.
+          # macOS marketing version is the three-part 1.0.0.
+          # Use the fourth component as the macOS build number.
+          BUILD_VERSION="${RELEASE_VERSION##*.}"
+
+          cat > "${CONTENTS_DIR}/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+
+              <key>CFBundleIdentifier</key>
+              <string>${MACOS_BUNDLE_ID}</string>
+
+              <key>CFBundleName</key>
+              <string>${MACOS_APP_NAME}</string>
+
+              <key>CFBundleDisplayName</key>
+              <string>${MACOS_APP_NAME}</string>
+
+              <key>CFBundleExecutable</key>
+              <string>${TRAY_APP_NAME}</string>
+
+              <key>CFBundleIconFile</key>
+              <string>ProxiedHosts.icns</string>
+
+              <key>CFBundleShortVersionString</key>
+              <string>${PACKAGE_VERSION}</string>
+
+              <key>CFBundleVersion</key>
+              <string>${BUILD_VERSION}</string>
+
+              <key>NSHighResolutionCapable</key>
+              <true/>
+
+              <key>LSUIElement</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+          plutil -lint "${CONTENTS_DIR}/Info.plist"
+
+      # ----------------------------------------------------------
+      # Verify that every Mach-O component is universal.
+      # ----------------------------------------------------------
+      - name: Verify universal architectures
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_BUNDLE="bundle/${MACOS_APP_NAME}.app"
+          FAILED=0
+          FOUND=0
+
+          while IFS= read -r -d '' FILE_PATH; do
+            if ! file "${FILE_PATH}" | grep -q "Mach-O"; then
+              continue
+            fi
+
+            FOUND=1
+            ARCHS="$(lipo -archs "${FILE_PATH}")"
+
+            echo "${FILE_PATH}: ${ARCHS}"
+
+            if [[ "${ARCHS}" != *"arm64"* ||
+                  "${ARCHS}" != *"x86_64"* ]]; then
+              echo "::error::Not universal: ${FILE_PATH}"
+              FAILED=1
+            fi
+          done < <(find "${APP_BUNDLE}/Contents/MacOS" -type f -print0)
+
+          if [[ "${FOUND}" -eq 0 ]]; then
+            echo "::error::No Mach-O files found in app bundle."
+            exit 1
+          fi
+
+          if [[ "${FAILED}" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo
+          echo "Main executable architectures:"
+          lipo -archs \
+            "${APP_BUNDLE}/Contents/MacOS/${TRAY_APP_NAME}"
+
+      # ----------------------------------------------------------
+      # Ad-hoc sign nested native code, then the complete bundle.
+      # ----------------------------------------------------------
+      - name: Sign macOS app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_BUNDLE="bundle/${MACOS_APP_NAME}.app"
+
+          while IFS= read -r -d '' FILE_PATH; do
+            if file "${FILE_PATH}" | grep -q "Mach-O"; then
+              codesign \
+                --force \
+                --sign - \
+                "${FILE_PATH}"
+            fi
+          done < <(find "${APP_BUNDLE}/Contents/MacOS" -type f -print0)
+
+          codesign \
+            --force \
+            --sign - \
+            "${APP_BUNDLE}"
+
+          codesign \
+            --verify \
+            --deep \
+            --strict \
+            --verbose=2 \
+            "${APP_BUNDLE}"
+
+      # ----------------------------------------------------------
+      # Package the .app for GitHub Releases.
+      # ----------------------------------------------------------
+      - name: Create macOS Tray release package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-assets
+
+          APP_BUNDLE="bundle/${MACOS_APP_NAME}.app"
+          ARCHIVE="release-assets/proxiedhosts-tray-${{ needs.prepare.outputs.version }}-macos-universal.zip"
+
+          ditto \
+            -c \
+            -k \
+            --sequesterRsrc \
+            --keepParent \
+            "${APP_BUNDLE}" \
+            "${ARCHIVE}"
+
+          echo "Created:"
+          ls -lh "${ARCHIVE}"
+
+      - name: Upload macOS Tray release package
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-tray-macos-universal
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ------------------------------------------------------------
   # GitHub Release
   #
   # This only runs after every Native AOT build has completed.
@@ -412,6 +848,8 @@ jobs:
       - prepare
       - publish
       - publish-macos
+      - publish-tray
+      - publish-tray-macos
 
     runs-on: ubuntu-latest
 
