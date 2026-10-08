@@ -32,10 +32,18 @@ internal static class Program
 
         try
         {
+            using var instance = SingleInstanceGuard.TryAcquire();
+
+            if (instance is null)
+            {
+                SystemConsole.Error.WriteLine("ProxiedHosts is already running.");
+                return 1;
+            }
+
             var logger = new ConsoleProxyLogger();
-            var configuration = ProxyConfiguration.Load();
+            var configuration = ProxyConfiguration.Instance;
             using var hostMappings = new HostMappingProvider(configuration.HostsFilePath, logger);
-            var portProvider = new PortProvider(configuration.ApplicationName);
+            var portProvider = new PortProvider();
             var port = await portProvider.GetOrCreateAvailablePortAsync(shutdown.Token);
             var proxyState = new ProxyState();
             var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, configuration.ConnectionLogMode, logger);
@@ -75,10 +83,11 @@ internal static class Program
             SystemConsole.WriteLine("HTTPS is tunneled with CONNECT; TLS is not decrypted or inspected.");
             SystemConsole.WriteLine();
             SystemConsole.WriteLine("P = toggle proxy mappings");
+            SystemConsole.WriteLine("E = edit proxiedhosts.txt");
             SystemConsole.WriteLine("Q / Ctrl+C = quit");
             SystemConsole.WriteLine();
 
-            _ = Task.Run(() => RunInputLoop(proxyState, shutdown));
+            _ = Task.Run(() => RunInputLoop(proxyState, configuration.HostsFilePath, shutdown));
             await proxy.RunAsync(shutdown.Token);
             SystemConsole.WriteLine("Proxy stopped.");
 
@@ -97,7 +106,7 @@ internal static class Program
 
     }
 
-    private static void RunInputLoop(ProxyState proxyState, CancellationTokenSource shutdown)
+    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, CancellationTokenSource shutdown)
     {
         while (!shutdown.IsCancellationRequested)
         {
@@ -107,6 +116,17 @@ internal static class Program
             {
                 case ConsoleKey.P:
                     proxyState.Toggle();
+                    break;
+
+                case ConsoleKey.E:
+                    try
+                    {
+                        FileLauncher.Open(hostsFilePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        SystemConsole.Error.WriteLine($"Failed to open hosts file: {ex.Message}");
+                    }
                     break;
 
                 case ConsoleKey.Q:

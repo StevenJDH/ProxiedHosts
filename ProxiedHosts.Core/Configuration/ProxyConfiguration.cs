@@ -18,16 +18,22 @@
 
 using ProxiedHosts.Core.Proxy;
 using System.Net;
+using ProxiedHosts.Core.Infrastructure;
 
 namespace ProxiedHosts.Core.Configuration;
 
-public sealed record ProxyConfiguration(string ApplicationName, IPAddress ListenAddress, string HostsFilePath, ConnectionLogMode ConnectionLogMode)
+public sealed record ProxyConfiguration(string ApplicationName, IPAddress ListenAddress, string HostsFilePath, string PortFilePath, ConnectionLogMode ConnectionLogMode)
 {
-    public static ProxyConfiguration Load()
+    public static ProxyConfiguration Instance { get; } = Load();
+
+    private static ProxyConfiguration Load()
     {
-        return new ProxyConfiguration(ApplicationName: "ProxiedHosts",
+        var directory = ApplicationPaths.GetDataDirectory();
+
+        return new ProxyConfiguration(ApplicationName: ApplicationPaths.ApplicationName,
                                       ListenAddress: IPAddress.Loopback,
-                                      HostsFilePath: Path.Combine(AppContext.BaseDirectory, "proxiedhosts.txt"),
+                                      HostsFilePath: Path.Combine(directory, "proxiedhosts.txt"),
+                                      PortFilePath: Path.Combine(directory, "proxy.port"),
                                       ConnectionLogMode: ConnectionLogMode.MappedOnly);
     }
 }

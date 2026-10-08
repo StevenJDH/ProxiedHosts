@@ -300,6 +300,10 @@ public sealed class HostMappingProvider : IDisposable
 
     private void EnsureFileExists()
     {
+        var directory = Path.GetDirectoryName(_filePath) ?? throw new InvalidOperationException("Could not determine the hosts file directory.");
+
+        Directory.CreateDirectory(directory);
+
         if (File.Exists(_filePath))
         {
             return;

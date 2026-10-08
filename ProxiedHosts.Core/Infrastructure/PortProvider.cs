@@ -16,6 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using ProxiedHosts.Core.Configuration;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -28,19 +29,9 @@ public sealed class PortProvider
     private const int MaxPort = 45000;
     private readonly string _portFile;
 
-    public PortProvider(string appName)
+    public PortProvider()
     {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-
-        if (string.IsNullOrWhiteSpace(root))
-        {
-            root = AppContext.BaseDirectory;
-        }
-
-        var directory = Path.Combine(root, appName);
-
-        Directory.CreateDirectory(directory);
-        _portFile = Path.Combine(directory, "proxy.port");
+        _portFile = ProxyConfiguration.Instance.PortFilePath;
     }
 
     public async Task<int> GetOrCreateAvailablePortAsync(CancellationToken cancellationToken)
