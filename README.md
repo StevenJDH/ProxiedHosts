@@ -30,17 +30,33 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 - Toggle proxy state to enable traffic passthrough without mapping requests.
 
 ## Usage
-Run the application to see the printout of the proxy URL configuration, for example:
+A console application and a system tray/menu bar variant of ProxiedHosts are provided as alternative options. For `proxiedhosts`, run the executable to see the printout of the proxy URL configuration, for example:
 
 ```text
 Proxy      : http://127.0.0.1:28741
 Port       : 28741 (stable and persisted)
 ```
 
-Configure the client application or system to use that address for both HTTP and HTTPS proxying.
+For `proxiedhosts-tray`, run the executable and right-click the icon in the system tray (or menu bar on macOS) to see the same proxy URL configuration, for example:
+
+```text
+────────────────────────────────
+| Status: Active                |
+| Proxy: http://127.0.0.1:12345 |
+| ───────────────────────────── |
+| ☑ Enable mappings (5)        |
+| ───────────────────────────── |
+| Open proxiedhosts.txt         |
+| Open log                      |
+| ───────────────────────────── |
+| Quit ProxiedHosts             |
+────────────────────────────────
+```
+
+With the proxy configuration in hand, configure the client application or system to use that address for both HTTP and HTTPS proxying.
 
 > [!TIP]
-> For Linux and macOS, run `chmod +x proxiedhosts` to set the execution bit so that `./proxiedhosts` works for running the application. Also, macOS users will likely need to run `xattr -d com.apple.quarantine proxiedhosts` to remove the quarantine attribute so that it doesn't get block by Gatekeeper. Alternatively, the execution can be approved by going to `System Settings > Privacy & Security`.
+> For Linux and macOS, run `chmod +x proxiedhosts` to set the execution bit so that `./proxiedhosts` works for running the application. Also, macOS users will likely need to run `xattr -d com.apple.quarantine proxiedhosts` to remove the quarantine attribute so that it doesn't get block by Gatekeeper. Alternatively, the execution can be approved by going to `System Settings > Privacy & Security`. The same applies for `proxiedhosts-tray`.
 
 ### Proxy port generation
 On first run, the application selects an unused port in the range `20000-45000` and writes it to:
@@ -80,6 +96,15 @@ Additionally, entries with ports are supported, which isn´t possible with the s
 
 > [!IMPORTANT]  
 > Port numbers must be in the range of 1-65535 inclusively to be valid.
+
+### File location
+The application has options to open the `proxiedhosts.txt` file directly, but below are the locations where the file is generated on first run:
+
+| Operating System | Location                                                                             |
+|------------------|--------------------------------------------------------------------------------------|
+| Windows          | %LOCALAPPDATA%\ProxiedHosts\proxiedhosts.txt                                         |
+| macOS            | ~/Library/Application Support/ProxiedHosts/proxiedhosts.txt                          |
+| Linux            | ~/.local/share/ProxiedHosts/proxiedhosts.txt (or the configured user data directory) |
 
 ## Disclaimer
 ProxiedHosts is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
