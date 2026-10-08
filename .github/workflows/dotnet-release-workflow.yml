@@ -354,6 +354,10 @@ jobs:
           # publish directory, so package the complete output.
           Copy-Item "$publishDirectory/*" $bundle -Recurse
 
+          # Remove debugging symbols from the release package.
+          Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.pdb' |
+              Remove-Item -Force
+
           if (Test-Path "README.md") {
               Copy-Item "README.md" $bundle
           }
@@ -393,6 +397,10 @@ jobs:
           fi
 
           cp -a "${PUBLISH_DIRECTORY}/." bundle-tray/
+
+          # Remove debugging symbols from the release package.
+          find bundle-tray -type f \( -name '*.pdb' -o -name '*.dbg' \) -delete
+
           chmod +x "bundle-tray/${TRAY_APP_NAME}"
 
           [[ -f README.md ]] && cp README.md bundle-tray/

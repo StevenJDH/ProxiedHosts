@@ -14,4 +14,9 @@
 		<ProjectReference Include="..\ProxiedHosts.Core\ProxiedHosts.Core.csproj" />
 	</ItemGroup>
 
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<!-- Excludes *.pdb files from the publish directory so they don't end up in the final packaging. -->
+		<CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+	</PropertyGroup>
+
 </Project>

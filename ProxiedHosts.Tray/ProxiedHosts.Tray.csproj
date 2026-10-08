@@ -21,6 +21,8 @@
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
 		<!-- Excludes *.pdb files from the publish directory to avoid macOS bundle signing issues. -->
 		<CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+		<!-- Does the same for debugging symbols from referenced nuget packages. -->
+		<PublishReferencesSymbols>false</PublishReferencesSymbols>
 	</PropertyGroup>
 
 	<ItemGroup>

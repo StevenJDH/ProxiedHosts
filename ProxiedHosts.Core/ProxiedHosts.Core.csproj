@@ -1,7 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
 	<PropertyGroup>
 		<RootNamespace>ProxiedHosts.Core</RootNamespace>
 		<IsAotCompatible>true</IsAotCompatible>
 		<Description>Core proxy and host-mapping functionality for ProxiedHosts.</Description>
 	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<!-- Excludes *.pdb files from the publish directory so they don't end up in the final packaging. -->
+		<CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+	</PropertyGroup>
+
 </Project>
