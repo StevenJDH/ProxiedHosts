@@ -675,6 +675,10 @@ jobs:
               -output "${OUTPUT_FILE}"
           done < <(find "${ARM_DIR}" -type f -print0)
 
+          # Remove debug symbols from the distributable application.
+          find "${MACOS_DIR}" -type f -name '*.pdb' -delete
+          find "${MACOS_DIR}" -type d -name '*.dSYM' -prune -exec rm -rf {} +
+
           chmod +x "${MACOS_DIR}/${TRAY_APP_NAME}"
 
           cp \

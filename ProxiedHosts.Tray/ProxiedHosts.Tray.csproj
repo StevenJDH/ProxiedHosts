@@ -17,6 +17,11 @@
 		<PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
 		<PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
 	</ItemGroup>
+	
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<!-- Excludes *.pdb files from the publish directory to avoid macOS bundle signing issues. -->
+		<CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+	</PropertyGroup>
 
 	<ItemGroup>
 		<AvaloniaResource Include="Assets/**" />
