@@ -45,4 +45,37 @@ public static class FileLauncher
 
         Process.Start(startInfo);
     }
+
+    public static void OpenUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new ArgumentException("A valid HTTPS URL is required.", nameof(url));
+        }
+
+        ProcessStartInfo startInfo;
+
+        if (OperatingSystem.IsWindows())
+        {
+            startInfo = new ProcessStartInfo(uri.AbsoluteUri)
+            {
+                UseShellExecute = true
+            };
+        }
+        else if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+        {
+            startInfo = new ProcessStartInfo(OperatingSystem.IsMacOS() ? "open" : "xdg-open")
+            {
+                UseShellExecute = false
+            };
+
+            startInfo.ArgumentList.Add(uri.AbsoluteUri);
+        }
+        else
+        {
+            throw new PlatformNotSupportedException("Opening URLs is not supported on this platform.");
+        }
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Unable to open {uri.AbsoluteUri}.");
+    }
 }

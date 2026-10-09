@@ -29,6 +29,7 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 * No modification of the system hosts file.
 * Toggle proxy state to enable traffic passthrough without mapping requests.
 * Optionally start tray application on system login.
+* Automatic and manual update checking with option for preview releases.
 
 ## Usage
 A console application and a system tray/menu bar variant of ProxiedHosts are provided as alternative options. For `proxiedhosts`, run the executable to see the printout of the proxy URL configuration, for example:
@@ -47,6 +48,9 @@ For `proxiedhosts-tray`, run the executable and right-click the icon in the syst
 | ───────────────────────────── |
 | ☑ Enable mappings (5)        |
 | ☑ Start at login             |
+| ───────────────────────────── |
+| Check for updates             |
+| ☐ Include preview releases   |
 | ───────────────────────────── |
 | Open proxiedhosts.txt         |
 | Open log                      |

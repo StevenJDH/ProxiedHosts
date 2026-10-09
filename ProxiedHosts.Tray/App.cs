@@ -23,12 +23,16 @@ using Avalonia.Platform;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 using ProxiedHosts.Core.Infrastructure;
+using ProxiedHosts.Tray.Configuration;
+using ProxiedHosts.Tray.Dialogs;
 using ProxiedHosts.Tray.Infrastructure;
 
 namespace ProxiedHosts.Tray;
 
 public sealed class App : Application
 {
+    private TraySettings _settings = new();
+
     private IClassicDesktopStyleApplicationLifetime? _desktop;
     private TrayProxyController? _controller;
     private FileProxyLogger? _logger;
@@ -38,6 +42,9 @@ public sealed class App : Application
     private NativeMenuItem? _proxyItem;
     private NativeMenuItem? _mappingsItem;
     private NativeMenuItem? _startupItem;
+    private NativeMenuItem? _checkUpdatesItem;
+    private NativeMenuItem? _previewReleasesItem;
+    private UpdateDialog? _updateDialog;
     private NativeMenuItem? _openHostsItem;
     private NativeMenuItem? _openLogItem;
 
@@ -56,12 +63,25 @@ public sealed class App : Application
             _desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _logger = new FileProxyLogger();
 
+            try
+            {
+                _settings = TraySettings.Load();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Failed to load tray settings: {ex.Message}");
+            }
+
+
             CreateTrayIcon();
 
             _controller = new TrayProxyController(_logger);
             _controller.Changed += OnControllerChanged;
 
             _ = StartProxyAsync();
+
+            // Check once at startup without blocking application initialization.
+            Dispatcher.UIThread.Post(() => _ = CheckForUpdatesAsync(automatic: true));
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -122,6 +142,35 @@ public sealed class App : Application
             }
         };
 
+        _checkUpdatesItem = new NativeMenuItem("Check for updates");
+
+        _checkUpdatesItem.Click += (_, _) =>
+        {
+            _ = CheckForUpdatesAsync();
+        };
+
+        _previewReleasesItem = new NativeMenuItem("Include preview releases")
+        {
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = _settings.IncludePreviewReleases
+        };
+
+        _previewReleasesItem.Click += (_, _) =>
+        {
+            try
+            {
+                _settings.SetIncludePreviewReleases(!_settings.IncludePreviewReleases);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"Failed to save update preferences: {ex.Message}");
+            }
+            finally
+            {
+                _previewReleasesItem!.IsChecked = _settings.IncludePreviewReleases;
+            }
+        };
+
         _openHostsItem = new NativeMenuItem("Open proxiedhosts.txt")
         {
             IsEnabled = false
@@ -155,6 +204,11 @@ public sealed class App : Application
 
             _mappingsItem,
             _startupItem,
+
+            new NativeMenuItemSeparator(),
+
+            _checkUpdatesItem,
+            _previewReleasesItem,
 
             new NativeMenuItemSeparator(),
 
@@ -230,6 +284,166 @@ public sealed class App : Application
         _trayIcon!.ToolTipText = _controller.IsActive ? $"ProxiedHosts - Active ({_controller.MappingCount} mappings)" : "ProxiedHosts - Inactive";
     }
 
+    private async Task CheckForUpdatesAsync(bool automatic = false)
+    {
+        if (_updateDialog is not null)
+        {
+            if (!automatic)
+            {
+                _updateDialog.Activate();
+            }
+
+            return;
+        }
+
+        if (_checkUpdatesItem is null || !_checkUpdatesItem.IsEnabled)
+        {
+            return;
+        }
+
+        _checkUpdatesItem.IsEnabled = false;
+        _previewReleasesItem!.IsEnabled = false;
+
+        try
+        {
+            var update = await UpdateChecker.CheckAsync(_settings.IncludePreviewReleases);
+
+            if (Volatile.Read(ref _shutdownStarted) != 0)
+            {
+                return;
+            }
+
+            var currentVersion = typeof(App).Assembly.GetName().Version
+                ?? throw new InvalidOperationException("Could not determine the installed version.");
+
+            if (update is null)
+            {
+                if (!automatic)
+                {
+                    ShowUpdateDialog($"ProxiedHosts is up to date.\n\nInstalled version: {currentVersion}");
+                }
+
+                return;
+            }
+
+            // Automatic checks notify only once per release version.
+            if (automatic && _settings.WasNotified(update.Version, update.IsPreview))
+            {
+                return;
+            }
+
+            // Avoid opening a second dialog if another is already visible.
+            if (_updateDialog is not null)
+            {
+                return;
+            }
+
+            var releaseType = update.IsPreview ? "preview version" : "version";
+
+            ShowUpdateDialog($"""
+                A new {releaseType} of ProxiedHosts is available.
+                         
+                Installed version: {currentVersion}
+                Available version: {update.Version}
+                  
+                "Would you like to open the GitHub release page?"
+                """,
+                () =>
+                {
+                    try
+                    {
+                        FileLauncher.OpenUrl(update.Url);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Error($"Failed to open release page: {ex}");
+
+                        ShowUpdateDialog($"Unable to open the GitHub release page.\n\n{ex.Message}");
+                    }
+                });
+
+            if (automatic)
+            {
+                // Remember that this release has already been announced,
+                // regardless of whether the user chooses Yes or No.
+                try
+                {
+                    _settings.MarkNotified(update.Version, update.IsPreview);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Warning($"Failed to save update notification state: {ex}");
+                }
+            }
+        }
+        catch (TaskCanceledException ex)
+        {
+            _logger?.Warning($"Update check timed out: {ex}");
+
+            if (!automatic)
+            {
+                ShowUpdateDialog("The update check timed out.\n\nCheck the internet connection and try again.");
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger?.Warning($"Update check failed: {ex}");
+
+            if (!automatic)
+            {
+                var message = ex.StatusCode is { } status
+                    ? $"GitHub returned HTTP {(int)status} ({status}).\n\nThe update check could not be completed. Please try again later."
+                    : "Unable to connect to GitHub.\n\nCheck the internet connection and try again.";
+
+                ShowUpdateDialog(message);
+            }
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _logger?.Warning($"Invalid GitHub response: {ex}");
+
+            if (!automatic)
+            {
+                ShowUpdateDialog("GitHub returned an invalid response.\n\nPlease try again later.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error($"Update check failed: {ex}");
+
+            if (!automatic)
+            {
+                ShowUpdateDialog($"An unexpected error occurred while checking for updates.\n\n{ex.Message}");
+            }
+        }
+        finally
+        {
+            _checkUpdatesItem.IsEnabled = true;
+            _previewReleasesItem.IsEnabled = true;
+        }
+    }
+
+    private void ShowUpdateDialog(string message, Action? onYes = null)
+    {
+        if (_updateDialog is not null)
+        {
+            _updateDialog.Activate();
+            return;
+        }
+
+        var dialog = new UpdateDialog(message, onYes);
+
+        dialog.Closed += (_, _) =>
+        {
+            _updateDialog = null;
+        };
+
+        _updateDialog = dialog;
+
+        dialog.Show();
+        dialog.Activate();
+    }
+
     private void OpenHostsFile()
     {
         if (_controller is null)
@@ -278,6 +492,7 @@ public sealed class App : Application
             await _controller.StopAsync();
         }
 
+        _updateDialog?.Close();
         _trayIcon?.Dispose();
         _desktop?.Shutdown();
     }
