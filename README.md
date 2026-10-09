@@ -12,22 +12,23 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 
 ## Features
 
-- Support Windows, Linux, and macOS (Intel/Apple Silicon) along with AOT compilation.
-- Custom hostname-to-IP mappings using a familiar hosts-file-style format.
-- Supports entries with ports to redirect requests.
-- Supports HTTP proxy requests.
-- Supports HTTPS tunneling via `CONNECT` without decrypting TLS.
-- No custom root certificate or TLS interception required.
-- End-to-end TLS remains intact for HTTPS connections.
-- Binds only to `127.0.0.1`.
-- Generates a random port on first run and persists it for later runs.
-- Hot-reloads `proxiedhosts.txt` when it changes.
-- Automatically closes only affected connections when mappings change without disrupting unrelated traffic.
-- Keeps the previous valid mappings and ignores the invalid ones when reloading.
-- Automatic fallback to normal DNS resolution for unmapped hosts.
-- No administrator privileges required for normal operation.
-- No modification of the system hosts file.
-- Toggle proxy state to enable traffic passthrough without mapping requests.
+* Support Windows, Linux, and macOS (Intel/Apple Silicon) along with AOT compilation.
+* Custom hostname-to-IP mappings using a familiar hosts-file-style format.
+* Supports entries with ports to redirect requests.
+* Supports HTTP proxy requests.
+* Supports HTTPS tunneling via `CONNECT` without decrypting TLS.
+* No custom root certificate or TLS interception required.
+* End-to-end TLS remains intact for HTTPS connections.
+* Binds only to `127.0.0.1`.
+* Generates a random port on first run and persists it for later runs.
+* Hot-reloads `proxiedhosts.txt` when it changes.
+* Automatically closes only affected connections when mappings change without disrupting unrelated traffic.
+* Keeps the previous valid mappings and ignores the invalid ones when reloading.
+* Automatic fallback to normal DNS resolution for unmapped hosts.
+* No administrator privileges required for normal operation.
+* No modification of the system hosts file.
+* Toggle proxy state to enable traffic passthrough without mapping requests.
+* Optionally start tray application on system login.
 
 ## Usage
 A console application and a system tray/menu bar variant of ProxiedHosts are provided as alternative options. For `proxiedhosts`, run the executable to see the printout of the proxy URL configuration, for example:
@@ -45,6 +46,7 @@ For `proxiedhosts-tray`, run the executable and right-click the icon in the syst
 | Proxy: http://127.0.0.1:12345 |
 | ───────────────────────────── |
 | ☑ Enable mappings (5)        |
+| ☑ Start at login             |
 | ───────────────────────────── |
 | Open proxiedhosts.txt         |
 | Open log                      |
@@ -56,7 +58,7 @@ For `proxiedhosts-tray`, run the executable and right-click the icon in the syst
 With the proxy configuration in hand, configure the client application or system to use that address for both HTTP and HTTPS proxying.
 
 > [!TIP]
-> For Linux and macOS, run `chmod +x proxiedhosts` to set the execution bit so that `./proxiedhosts` works for running the application. Also, macOS users will likely need to run `xattr -d com.apple.quarantine proxiedhosts` to remove the quarantine attribute so that it doesn't get block by Gatekeeper. Alternatively, the execution can be approved by going to `System Settings > Privacy & Security`. The same applies for `proxiedhosts-tray`.
+> For Linux and macOS, run `chmod +x proxiedhosts` to set the execution bit so that `./proxiedhosts` works for running the application. Also, macOS users will likely need to run `xattr -d com.apple.quarantine proxiedhosts` to remove the quarantine attribute so that it doesn't get block by Gatekeeper. Alternatively, the execution can be approved by going to `System Settings > Privacy & Security`. The same applies for `proxiedhosts-tray`. For Windows, if there is a blue popup, click the `More info` text, and then click the `Run anyway` button. Subsequent runs will not require this.
 
 ### Proxy port generation
 On first run, the application selects an unused port in the range `20000-45000` and writes it to:
@@ -105,6 +107,18 @@ The application has options to open the `proxiedhosts.txt` file directly, but be
 | Windows          | %LOCALAPPDATA%\ProxiedHosts\proxiedhosts.txt                                         |
 | macOS            | ~/Library/Application Support/ProxiedHosts/proxiedhosts.txt                          |
 | Linux            | ~/.local/share/ProxiedHosts/proxiedhosts.txt (or the configured user data directory) |
+
+## Automatic startup
+ProxiedHosts supports running at system login to maintain connectivity for applications using the proxy configuration. The below table shows where the startup configuration is set.
+
+| Operating System | Location                                                                                                         |
+|------------------|------------------------------------------------------------------------------------------------------------------|
+| Windows          | HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run                                                  |
+| macOS            | ~/Library/LaunchAgents/io.github.stevenjdh.proxiedhosts.plist                                                    |
+| Linux            | ~/.config/autostart/proxiedhosts-tray.desktop (or the equivalent directory configured through `XDG_CONFIG_HOME`) |
+
+> [!TIP]
+> Move the proxiedhosts-tray application to a permanent location before enabling startup at login. Likewise, before removing the application or changing its location, ensure to disable the startup first.
 
 ## Disclaimer
 ProxiedHosts is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.

@@ -23,6 +23,7 @@ using Avalonia.Platform;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
 using ProxiedHosts.Core.Infrastructure;
+using ProxiedHosts.Tray.Infrastructure;
 
 namespace ProxiedHosts.Tray;
 
@@ -36,6 +37,7 @@ public sealed class App : Application
     private NativeMenuItem? _statusItem;
     private NativeMenuItem? _proxyItem;
     private NativeMenuItem? _mappingsItem;
+    private NativeMenuItem? _startupItem;
     private NativeMenuItem? _openHostsItem;
     private NativeMenuItem? _openLogItem;
 
@@ -52,12 +54,11 @@ public sealed class App : Application
         {
             _desktop = desktop;
             _desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _logger = new FileProxyLogger();
 
             CreateTrayIcon();
 
-            _logger = new FileProxyLogger();
             _controller = new TrayProxyController(_logger);
-
             _controller.Changed += OnControllerChanged;
 
             _ = StartProxyAsync();
@@ -89,6 +90,36 @@ public sealed class App : Application
         _mappingsItem.Click += (_, _) =>
         {
             _controller?.ToggleMappings();
+        };
+
+        _startupItem = new NativeMenuItem("Start at login")
+        {
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = StartupManager.IsEnabled()
+        };
+
+        _startupItem.Click += (_, _) =>
+        {
+            try
+            {
+                StartupManager.SetEnabled(!StartupManager.IsEnabled());
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"Failed to update login startup: {ex}");
+            }
+            finally
+            {
+                try
+                {
+                    _startupItem!.IsChecked = StartupManager.IsEnabled();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.Error($"Failed to read login startup status: {ex}");
+                    _startupItem!.IsChecked = false;
+                }
+            }
         };
 
         _openHostsItem = new NativeMenuItem("Open proxiedhosts.txt")
@@ -123,6 +154,7 @@ public sealed class App : Application
             new NativeMenuItemSeparator(),
 
             _mappingsItem,
+            _startupItem,
 
             new NativeMenuItemSeparator(),
 
