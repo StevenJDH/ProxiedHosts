@@ -7,7 +7,7 @@
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<RootNamespace>ProxiedHosts.Tray</RootNamespace>
 		<AssemblyName>proxiedhosts-tray</AssemblyName>
-
+		<ApplicationIcon>Assets/ProxiedHosts.ico</ApplicationIcon>
 		<!-- Set as false to see full analysis details. Default is true. -->
 		<TrimmerSingleWarn>true</TrimmerSingleWarn>
 	</PropertyGroup>
