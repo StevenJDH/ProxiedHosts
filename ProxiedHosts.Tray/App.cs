@@ -134,7 +134,8 @@ public sealed class App : Application
             quitItem
         };
 
-        using var iconStream = AssetLoader.Open(new Uri("avares://proxiedhosts-tray/Assets/ProxiedHosts.ico"));
+        var iconFile = OperatingSystem.IsMacOS() ? "ProxiedHostsTemplate.png" : "ProxiedHostsTray.ico";
+        using var iconStream = AssetLoader.Open(new Uri($"avares://proxiedhosts-tray/Assets/{iconFile}"));
 
         _trayIcon = new TrayIcon
         {
