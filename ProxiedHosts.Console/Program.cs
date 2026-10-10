@@ -19,6 +19,7 @@
 using ProxiedHosts.Core.Configuration;
 using ProxiedHosts.Core.Hosts;
 using ProxiedHosts.Core.Infrastructure;
+using ProxiedHosts.Core.Logging;
 using ProxiedHosts.Core.Proxy;
 using SystemConsole = System.Console;
 
@@ -26,9 +27,12 @@ namespace ProxiedHosts.Console;
 
 internal static class Program
 {
+    private static int _updateCheckRunning;
+
     public static async Task<int> Main()
     {
         using var shutdown = new CancellationTokenSource();
+        var logger = new ConsoleProxyLogger();
 
         try
         {
@@ -36,12 +40,12 @@ internal static class Program
 
             if (instance is null)
             {
-                SystemConsole.Error.WriteLine("ProxiedHosts is already running.");
+                logger.Error("ProxiedHosts is already running.");
                 return 1;
             }
 
-            var logger = new ConsoleProxyLogger();
             var configuration = ProxyConfiguration.Instance;
+            var currentVersion = typeof(Program).Assembly.GetName().Version ?? throw new InvalidOperationException("Could not determine the installed version.");
             using var hostMappings = new HostMappingProvider(configuration.HostsFilePath, logger);
             var portProvider = new PortProvider();
             var port = await portProvider.GetOrCreateAvailablePortAsync(shutdown.Token);
@@ -59,8 +63,7 @@ internal static class Program
 
                 if (!shutdown.IsCancellationRequested)
                 {
-                    SystemConsole.WriteLine();
-                    SystemConsole.WriteLine("Stopping proxy...");
+                    logger.Information("Stopping proxy...");
                     shutdown.Cancel();
                 }
             };
@@ -68,7 +71,7 @@ internal static class Program
             proxyState.Changed += active =>
             {
                 connectionHandler.DisconnectChangedConnections();
-                SystemConsole.WriteLine(active ? "Proxy mappings activated." : "Proxy mappings deactivated. Traffic will use normal DNS.");
+                logger.Information(active ? "Proxy mappings activated." : "Proxy mappings deactivated. Traffic will use normal DNS.");
             };
 
             SystemConsole.WriteLine();
@@ -84,12 +87,17 @@ internal static class Program
             SystemConsole.WriteLine();
             SystemConsole.WriteLine("P = toggle proxy mappings");
             SystemConsole.WriteLine("E = edit proxiedhosts.txt");
+            SystemConsole.WriteLine("U = check for updates");
             SystemConsole.WriteLine("Q / Ctrl+C = quit");
             SystemConsole.WriteLine();
 
-            _ = Task.Run(() => RunInputLoop(proxyState, configuration.HostsFilePath, shutdown));
+            // Check for updates after displaying the startup information,
+            // without delaying proxy startup or keyboard input.
+            _ = CheckForUpdatesAsync(currentVersion, logger, shutdown.Token);
+
+            _ = Task.Run(() => RunInputLoop(proxyState, configuration.HostsFilePath, currentVersion, logger, shutdown));
             await proxy.RunAsync(shutdown.Token);
-            SystemConsole.WriteLine("Proxy stopped.");
+            logger.Information("Proxy stopped.");
 
             return 0;
         }
@@ -99,14 +107,12 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            SystemConsole.Error.WriteLine($"Fatal error: {ex.Message}");
-            SystemConsole.Error.WriteLine(ex);
+            logger.Error($"Fatal error: {ex.Message}{Environment.NewLine}{ex}");
             return 1;
         }
-
     }
 
-    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, CancellationTokenSource shutdown)
+    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, Version currentVersion, IProxyLogger logger, CancellationTokenSource shutdown)
     {
         while (!shutdown.IsCancellationRequested)
         {
@@ -125,16 +131,69 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        SystemConsole.Error.WriteLine($"Failed to open hosts file: {ex.Message}");
+                        logger.Error($"Failed to open hosts file: {ex.Message}");
                     }
                     break;
 
+                case ConsoleKey.U:
+                    _ = CheckForUpdatesAsync(currentVersion, logger, shutdown.Token);
+                    break;
+
                 case ConsoleKey.Q:
-                    SystemConsole.WriteLine();
-                    SystemConsole.WriteLine("Stopping proxy...");
+                    logger.Information("Stopping proxy...");
                     shutdown.Cancel();
                     return;
             }
+        }
+    }
+
+    private static async Task CheckForUpdatesAsync(Version currentVersion, IProxyLogger logger, CancellationToken cancellationToken)
+    {
+        if (Interlocked.CompareExchange(ref _updateCheckRunning, 1, 0) != 0)
+        {
+            logger.Warning("An update check is already in progress.");
+            return;
+        }
+
+        try
+        {
+            logger.Information("Checking for updates...");
+
+            // Console checks stable releases only.
+            var update = await UpdateChecker.CheckAsync(currentVersion, includePreviewReleases: false, cancellationToken: cancellationToken);
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (update is null)
+            {
+                logger.Information($"ProxiedHosts is up to date (v{currentVersion}).");
+                return;
+            }
+
+            logger.Information($"Update available: v{currentVersion} -> v{update.Version} | {update.Url}");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Normal application shutdown.
+        }
+        catch (OperationCanceledException)
+        {
+            logger.Warning("Update check timed out. Press U to retry.");
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.Warning($"Unable to check for updates: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Update check failed: {ex.Message}");
+        }
+        finally
+        {
+            Volatile.Write(ref _updateCheckRunning, 0);
         }
     }
 }

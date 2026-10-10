@@ -353,15 +353,13 @@ public sealed class App : Application
 
         try
         {
-            var update = await UpdateChecker.CheckAsync(_settings.IncludePreviewReleases);
+            var currentVersion = typeof(App).Assembly.GetName().Version ?? throw new InvalidOperationException("Could not determine the installed version.");
+            var update = await UpdateChecker.CheckAsync(currentVersion, _settings.IncludePreviewReleases);
 
             if (Volatile.Read(ref _shutdownStarted) != 0)
             {
                 return;
             }
-
-            var currentVersion = typeof(App).Assembly.GetName().Version
-                ?? throw new InvalidOperationException("Could not determine the installed version.");
 
             if (update is null)
             {

@@ -19,15 +19,15 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-namespace ProxiedHosts.Tray.Infrastructure;
+namespace ProxiedHosts.Core.Infrastructure;
 
-internal sealed record AvailableUpdate(Version Version, string Url, bool IsPreview);
+public sealed record AvailableUpdate(Version Version, string Url, bool IsPreview);
 
 /// <summary>
 /// Checks published GitHub releases for versions newer than the
-/// currently installed tray application, optionally including prereleases.
+/// specified application version, optionally including prereleases.
 /// </summary>
-internal static class UpdateChecker
+public static class UpdateChecker
 {
     private const string ReleasesUrl = "https://api.github.com/repos/StevenJDH/ProxiedHosts/releases?per_page=100";
 
@@ -36,9 +36,8 @@ internal static class UpdateChecker
         Timeout = TimeSpan.FromSeconds(10)
     };
 
-    public static async Task<AvailableUpdate?> CheckAsync(bool includePreviewReleases, CancellationToken cancellationToken = default)
+    public static async Task<AvailableUpdate?> CheckAsync(Version currentVersion, bool includePreviewReleases, CancellationToken cancellationToken = default)
     {
-        var currentVersion = typeof(App).Assembly.GetName().Version ?? throw new InvalidOperationException("Could not determine the application version.");
         using var request = new HttpRequestMessage(HttpMethod.Get, ReleasesUrl);
 
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("ProxiedHosts", "1.0"));
