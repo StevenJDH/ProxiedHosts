@@ -22,6 +22,7 @@ using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
 using ProxiedHosts.Core.Proxy;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using SystemConsole = System.Console;
 
@@ -33,6 +34,8 @@ internal static class Program
 
     public static async Task<int> Main()
     {
+        SystemConsole.OutputEncoding = new UTF8Encoding(false);
+
         using var shutdown = new CancellationTokenSource();
         var logger = new ConsoleProxyLogger();
 
@@ -80,6 +83,7 @@ internal static class Program
             SystemConsole.WriteLine("E = edit proxiedhosts.txt");
             SystemConsole.WriteLine("U = check for updates");
             SystemConsole.WriteLine("A = about ProxiedHosts");
+            SystemConsole.WriteLine("D = donate 5€ (PayPal)...");
             SystemConsole.WriteLine("Q / Ctrl+C = quit");
             SystemConsole.WriteLine();
 
@@ -154,6 +158,22 @@ internal static class Program
 
                 case ConsoleKey.A:
                     ShowAboutInformation();
+                    break;
+
+                case ConsoleKey.D:
+                    try
+                    {
+                        var donationUrl = typeof(Program).Assembly
+                            .GetCustomAttributes<AssemblyMetadataAttribute>()
+                            .FirstOrDefault(attribute => attribute.Key == "FixedDonationUrl")?
+                            .Value ?? string.Empty;
+
+                        FileLauncher.OpenUrl(donationUrl);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error($"Failed to open donation page: {ex.Message}");
+                    }
                     break;
 
                 case ConsoleKey.Q:
@@ -237,7 +257,7 @@ internal static class Program
         var assembly = typeof(Program).Assembly;
         var product = assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "ProxiedHosts";
         var version = assembly.GetName().Version?.ToString() ?? "Unknown";
-        var copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright.Replace("©", "(C)") ?? string.Empty;
+        var copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? string.Empty;
         var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>();
 
         var authors = metadata

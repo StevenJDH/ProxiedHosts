@@ -1,4 +1,5 @@
 <Project>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -15,4 +16,10 @@
     <Authors>Steven Jenkins De Haro</Authors>
     <RepositoryUrl>https://github.com/StevenJDH/ProxiedHosts</RepositoryUrl>
   </PropertyGroup>
+  
+  <PropertyGroup>
+    <DonationUrl>https://www.paypal.me/stevenjdh</DonationUrl>
+    <FixedDonationUrl>https://www.paypal.me/stevenjdh/5</FixedDonationUrl>
+  </PropertyGroup>
+
 </Project>

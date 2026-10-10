@@ -24,6 +24,11 @@
 			<_Parameter1>Authors</_Parameter1>
 			<_Parameter2>$(Authors)</_Parameter2>
 		</AssemblyAttribute>
+
+		<AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+			<_Parameter1>FixedDonationUrl</_Parameter1>
+			<_Parameter2>$(FixedDonationUrl)</_Parameter2>
+		</AssemblyAttribute>
 	</ItemGroup>
 
 </Project>
