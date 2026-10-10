@@ -123,6 +123,36 @@ internal sealed class AboutDialog : Window
             IsEnabled = IsHttpsUrl(repositoryUrl)
         };
 
+        // Keep the repository link readable in every interaction state.
+        var linkColor = new SolidColorBrush(Color.Parse("#0078D4"));
+
+        foreach (var resource in new[]
+                 {
+                     "HyperlinkButtonForeground",
+                     "HyperlinkButtonForegroundPointerOver",
+                     "HyperlinkButtonForegroundPressed",
+                     "HyperlinkButtonForegroundVisited",
+                     "HyperlinkButtonForegroundVisitedPointerOver",
+                     "HyperlinkButtonForegroundVisitedPressed"
+                 })
+        {
+            repositoryLink.Resources[resource] = linkColor;
+        }
+
+        // Remove the hyperlink's hover and pressed background/border.
+        foreach (var resource in new[]
+                 {
+                     "HyperlinkButtonBackground",
+                     "HyperlinkButtonBackgroundPointerOver",
+                     "HyperlinkButtonBackgroundPressed",
+                     "HyperlinkButtonBorderBrush",
+                     "HyperlinkButtonBorderBrushPointerOver",
+                     "HyperlinkButtonBorderBrushPressed"
+                 })
+        {
+            repositoryLink.Resources[resource] = Brushes.Transparent;
+        }
+
         repositoryLink.Click += (_, _) => OpenUrl(repositoryUrl);
         repositoryLink.Padding = new Thickness(0);
         repositoryLink.VerticalAlignment = VerticalAlignment.Center;
