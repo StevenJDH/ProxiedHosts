@@ -35,6 +35,7 @@
 
 	<PropertyGroup>
 		<DonationUrl>https://www.paypal.me/stevenjdh</DonationUrl>
+		<FixedDonationUrl>https://www.paypal.me/stevenjdh/5</FixedDonationUrl>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -46,6 +47,11 @@
 		<AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
 			<_Parameter1>DonationUrl</_Parameter1>
 			<_Parameter2>$(DonationUrl)</_Parameter2>
+		</AssemblyAttribute>
+
+		<AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+			<_Parameter1>FixedDonationUrl</_Parameter1>
+			<_Parameter2>$(FixedDonationUrl)</_Parameter2>
 		</AssemblyAttribute>
 
 		<EmbeddedResource Include="..\LICENSE" LogicalName="ProxiedHosts.LICENSE" />

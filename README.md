@@ -42,21 +42,24 @@ Port       : 28741 (stable and persisted)
 For `proxiedhosts-tray`, run the executable and right-click the icon in the system tray (or menu bar on macOS) to see the same proxy URL configuration, for example:
 
 ```text
-────────────────────────────────
-| Status: Active                |
-| Proxy: http://127.0.0.1:12345 |
-| ───────────────────────────── |
-| ☑ Enable mappings (5)        |
-| ☑ Start at login             |
-| ───────────────────────────── |
-| Check for updates             |
-| ☐ Include preview releases   |
-| ───────────────────────────── |
-| Open proxiedhosts.txt         |
-| Open log                      |
-| ───────────────────────────── |
-| Quit ProxiedHosts             |
-────────────────────────────────
+┌──────────────────────────────────────┐
+│ Status: Active                       │
+│ Proxy: http://127.0.0.1:12345        │
+├──────────────────────────────────────┤
+│ ☑ Enable mappings (5)               │
+│ ☑ Start at login                    │
+├──────────────────────────────────────┤
+│ Open proxiedhosts.txt                │
+│ Open log                             │
+├──────────────────────────────────────┤
+│ Help                               ▸ │   ┌──────────────────────────────────┐
+├──────────────────────────────────────┤   │ Donate 5€ (PayPal)...            │
+│ Quit ProxiedHosts                    │   ├──────────────────────────────────┤
+└──────────────────────────────────────┘   │ Check for updates                │
+                                           │ ☐ Include preview releases      │
+                                           ├──────────────────────────────────┤
+                                           │ About ProxiedHosts               │
+                                           └──────────────────────────────────┘
 ```
 
 With the proxy configuration in hand, configure the client application or system to use that address for both HTTP and HTTPS proxying.

@@ -16,6 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -143,6 +144,45 @@ public sealed class App : Application
             }
         };
 
+        _openHostsItem = new NativeMenuItem("Open proxiedhosts.txt")
+        {
+            IsEnabled = false
+        };
+
+        _openHostsItem.Click += (_, _) =>
+        {
+            OpenHostsFile();
+        };
+
+        _openLogItem = new NativeMenuItem("Open log");
+
+        _openLogItem.Click += (_, _) =>
+        {
+            OpenLogFile();
+        };
+
+        var donationUrl = typeof(App).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => attribute.Key == "FixedDonationUrl")?
+            .Value ?? string.Empty;
+
+        var donateItem = new NativeMenuItem("Donate 5€ (PayPal)...")
+        {
+            IsEnabled = Uri.TryCreate(donationUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+        };
+
+        donateItem.Click += (_, _) =>
+        {
+            try
+            {
+                FileLauncher.OpenUrl(donationUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"Failed to open donation page: {ex}");
+            }
+        };
+
         _checkUpdatesItem = new NativeMenuItem("Check for updates");
 
         _checkUpdatesItem.Click += (_, _) =>
@@ -172,28 +212,28 @@ public sealed class App : Application
             }
         };
 
-        _openHostsItem = new NativeMenuItem("Open proxiedhosts.txt")
-        {
-            IsEnabled = false
-        };
-
-        _openHostsItem.Click += (_, _) =>
-        {
-            OpenHostsFile();
-        };
-
-        _openLogItem = new NativeMenuItem("Open log");
-
-        _openLogItem.Click += (_, _) =>
-        {
-            OpenLogFile();
-        };
-
         var aboutItem = new NativeMenuItem("About ProxiedHosts");
 
         aboutItem.Click += (_, _) =>
         {
             ShowAboutDialog();
+        };
+
+        var helpItem = new NativeMenuItem("Help")
+        {
+            Menu = new NativeMenu
+            {
+                donateItem,
+
+                new NativeMenuItemSeparator(),
+
+                _checkUpdatesItem!,
+                _previewReleasesItem!,
+
+                new NativeMenuItemSeparator(),
+
+                aboutItem
+            }
         };
 
         var quitItem = new NativeMenuItem("Quit ProxiedHosts");
@@ -215,17 +255,12 @@ public sealed class App : Application
 
             new NativeMenuItemSeparator(),
 
-            _checkUpdatesItem,
-            _previewReleasesItem,
-
-            new NativeMenuItemSeparator(),
-
             _openHostsItem,
             _openLogItem,
 
             new NativeMenuItemSeparator(),
 
-            aboutItem,
+            helpItem,
 
             new NativeMenuItemSeparator(),
 
