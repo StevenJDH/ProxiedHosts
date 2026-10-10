@@ -52,7 +52,7 @@ internal sealed class AboutDialog : Window
         var donationUrl = GetMetadata(assembly, "DonationUrl");
 
         Title = $"About {product}";
-        Width = 732;
+        Width = 700;
         Height = 530;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
