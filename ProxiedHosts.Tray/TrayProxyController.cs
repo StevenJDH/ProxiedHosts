@@ -127,6 +127,7 @@ internal sealed class TrayProxyController
     private void OnProxyStateChanged(bool active)
     {
         _connectionHandler!.DisconnectChangedConnections();
+        _logger.Information(active ? "Proxy mappings activated." : "Proxy mappings deactivated. Traffic will use normal DNS.");
         Changed?.Invoke();
     }
 }
