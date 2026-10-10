@@ -30,8 +30,7 @@ internal sealed class TraySettings
     {
         get
         {
-            var directory = Path.GetDirectoryName(ProxyConfiguration.Instance.HostsFilePath)
-                ?? throw new InvalidOperationException("Could not determine the application data directory.");
+            var directory = Path.GetDirectoryName(ProxyConfiguration.Instance.HostsFilePath)!;
 
             return Path.Combine(directory, "tray-settings.json");
         }
@@ -133,8 +132,6 @@ internal sealed class TraySettings
     private void Save()
     {
         var path = SettingsPath;
-
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
         using var stream = File.Create(path);
         using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });

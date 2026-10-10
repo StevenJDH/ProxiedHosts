@@ -19,6 +19,15 @@
 		<CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
 	</PropertyGroup>
 
+	<!-- Remove debugging symbols from Release publish output when above is ignored. -->
+	<Target Name="RemovePublishedPdbFiles" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release' and '$(PublishDir)' != ''">
+		<ItemGroup>
+			<_PublishedPdbFiles Include="$(PublishDir)**/*.pdb" />
+		</ItemGroup>
+
+		<Delete Files="@(_PublishedPdbFiles)" />
+	</Target>
+
 	<ItemGroup>
 		<AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
 			<_Parameter1>Authors</_Parameter1>
