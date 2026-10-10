@@ -9,6 +9,7 @@
     <AssemblyVersion>1.0.0.26105</AssemblyVersion>
     <FileVersion>1.0.0.26105</FileVersion>
 
+    <Product>ProxiedHosts</Product>
     <Description>ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hostname-to-IP mappings without modifying the system hosts file.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <Authors>Steven Jenkins De Haro</Authors>

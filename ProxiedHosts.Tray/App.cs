@@ -47,6 +47,7 @@ public sealed class App : Application
     private UpdateDialog? _updateDialog;
     private NativeMenuItem? _openHostsItem;
     private NativeMenuItem? _openLogItem;
+    private AboutDialog? _aboutDialog;
 
     private int _shutdownStarted;
 
@@ -188,6 +189,13 @@ public sealed class App : Application
             OpenLogFile();
         };
 
+        var aboutItem = new NativeMenuItem("About ProxiedHosts");
+
+        aboutItem.Click += (_, _) =>
+        {
+            ShowAboutDialog();
+        };
+
         var quitItem = new NativeMenuItem("Quit ProxiedHosts");
 
         quitItem.Click += (_, _) =>
@@ -214,6 +222,10 @@ public sealed class App : Application
 
             _openHostsItem,
             _openLogItem,
+
+            new NativeMenuItemSeparator(),
+
+            aboutItem,
 
             new NativeMenuItemSeparator(),
 
@@ -478,6 +490,27 @@ public sealed class App : Application
         }
     }
 
+    private void ShowAboutDialog()
+    {
+        if (_aboutDialog is not null)
+        {
+            _aboutDialog.Activate();
+            return;
+        }
+
+        var dialog = new AboutDialog(message => _logger?.Error(message));
+
+        dialog.Closed += (_, _) =>
+        {
+            _aboutDialog = null;
+        };
+
+        _aboutDialog = dialog;
+
+        dialog.Show();
+        dialog.Activate();
+    }
+
     private async Task ShutdownAsync()
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
@@ -492,6 +525,7 @@ public sealed class App : Application
             await _controller.StopAsync();
         }
 
+        _aboutDialog?.Close();
         _updateDialog?.Close();
         _trayIcon?.Dispose();
         _desktop?.Shutdown();
