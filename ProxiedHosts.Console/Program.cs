@@ -21,6 +21,7 @@ using ProxiedHosts.Core.Hosts;
 using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
 using ProxiedHosts.Core.Proxy;
+using System.Reflection;
 using System.Text.Json;
 using SystemConsole = System.Console;
 
@@ -78,6 +79,7 @@ internal static class Program
             SystemConsole.WriteLine("P = toggle proxy mappings");
             SystemConsole.WriteLine("E = edit proxiedhosts.txt");
             SystemConsole.WriteLine("U = check for updates");
+            SystemConsole.WriteLine("A = about ProxiedHosts");
             SystemConsole.WriteLine("Q / Ctrl+C = quit");
             SystemConsole.WriteLine();
 
@@ -148,6 +150,10 @@ internal static class Program
 
                 case ConsoleKey.U:
                     _ = CheckForUpdatesAsync(currentVersion, logger, shutdown.Token);
+                    break;
+
+                case ConsoleKey.A:
+                    ShowAboutInformation();
                     break;
 
                 case ConsoleKey.Q:
@@ -223,5 +229,38 @@ internal static class Program
         {
             Volatile.Write(ref _updateCheckRunning, 0);
         }
+    }
+
+
+    private static void ShowAboutInformation()
+    {
+        var assembly = typeof(Program).Assembly;
+        var product = assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "ProxiedHosts";
+        var version = assembly.GetName().Version?.ToString() ?? "Unknown";
+        var copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright.Replace("©", "(C)") ?? string.Empty;
+        var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>();
+
+        var authors = metadata
+            .FirstOrDefault(attribute => attribute.Key == "Authors")?
+            .Value ?? string.Empty;
+
+        var repositoryUrl = metadata
+            .FirstOrDefault(attribute => attribute.Key == "RepositoryUrl")?
+            .Value ?? string.Empty;
+
+        SystemConsole.WriteLine();
+        SystemConsole.WriteLine($"About {product}");
+        SystemConsole.WriteLine("------------------");
+        SystemConsole.WriteLine($"Version   : {version}");
+        SystemConsole.WriteLine($"Author    : {authors}");
+        SystemConsole.WriteLine($"Copyright : {copyright} {authors}");
+        SystemConsole.WriteLine("License   : GNU General Public License v3 or later");
+        SystemConsole.WriteLine($"Source    : {repositoryUrl}");
+        SystemConsole.WriteLine();
+        SystemConsole.WriteLine($"{product} is free software: you can redistribute it and/or modify it");
+        SystemConsole.WriteLine("under the terms of the GNU General Public License as published by the");
+        SystemConsole.WriteLine("Free Software Foundation, either version 3 of the License, or (at your");
+        SystemConsole.WriteLine("option) any later version.");
+        SystemConsole.WriteLine();
     }
 }
