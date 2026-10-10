@@ -55,18 +55,7 @@ internal static class Program
 
             hostMappings.MappingsReloaded += connectionHandler.DisconnectChangedConnections;
 
-            SystemConsole.CancelKeyPress += (_, e) =>
-            {
-                // Prevent the runtime from terminating immediately so
-                // resources can shut down cleanly.
-                e.Cancel = true;
-
-                if (!shutdown.IsCancellationRequested)
-                {
-                    logger.Information("Stopping proxy...");
-                    shutdown.Cancel();
-                }
-            };
+            using var cancelHandler = new ConsoleCancelHandler(shutdown, logger);
 
             proxyState.Changed += active =>
             {
@@ -95,8 +84,23 @@ internal static class Program
             // without delaying proxy startup or keyboard input.
             _ = CheckForUpdatesAsync(currentVersion, logger, shutdown.Token);
 
-            _ = Task.Run(() => RunInputLoop(proxyState, configuration.HostsFilePath, currentVersion, logger, shutdown));
-            await proxy.RunAsync(shutdown.Token);
+            // Start the proxy asynchronously.
+            var proxyTask = proxy.RunAsync(shutdown.Token);
+
+            try
+            {
+                // Handle keyboard input without creating a detached background task.
+                RunInputLoop(proxyState, configuration.HostsFilePath, currentVersion, logger, shutdown, proxyTask);
+                await proxyTask;
+            }
+            finally
+            {
+                if (!shutdown.IsCancellationRequested)
+                {
+                    await shutdown.CancelAsync();
+                }
+            }
+
             logger.Information("Proxy stopped.");
 
             return 0;
@@ -112,10 +116,16 @@ internal static class Program
         }
     }
 
-    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, Version currentVersion, IProxyLogger logger, CancellationTokenSource shutdown)
+    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, Version currentVersion, IProxyLogger logger, CancellationTokenSource shutdown, Task proxyTask)
     {
-        while (!shutdown.IsCancellationRequested)
+        while (!shutdown.IsCancellationRequested && !proxyTask.IsCompleted)
         {
+            if (!SystemConsole.KeyAvailable)
+            {
+                Thread.Sleep(50);
+                continue;
+            }
+
             var key = SystemConsole.ReadKey(intercept: true);
 
             switch (key.Key)
@@ -140,8 +150,11 @@ internal static class Program
                     break;
 
                 case ConsoleKey.Q:
-                    logger.Information("Stopping proxy...");
-                    shutdown.Cancel();
+                    if (!shutdown.IsCancellationRequested)
+                    {
+                        logger.Information("Stopping proxy...");
+                        shutdown.Cancel();
+                    }
                     return;
             }
         }
