@@ -24,16 +24,16 @@ internal sealed class ConsoleProxyLogger : IProxyLogger
 {
     public void Information(string message)
     {
-        System.Console.WriteLine(message);
+        System.Console.WriteLine($"[{DateTimeOffset.Now:T}] {message}");
     }
 
     public void Warning(string message)
     {
-        System.Console.Error.WriteLine(message);
+        System.Console.Error.WriteLine($"[{DateTimeOffset.Now:T}] {message}");
     }
 
     public void Error(string message)
     {
-        System.Console.Error.WriteLine(message);
+        System.Console.Error.WriteLine($"[{DateTimeOffset.Now:T}] {message}");
     }
 }

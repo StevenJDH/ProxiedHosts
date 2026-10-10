@@ -84,7 +84,7 @@ public sealed class ProxyConnectionHandler
             }
             catch (Exception ex)
             {
-                _logger.Error($"[{DateTimeOffset.Now:T}] Client error: {ex.Message}");
+                _logger.Error($"Client error: {ex.Message}");
             }
             finally
             {
@@ -156,7 +156,7 @@ public sealed class ProxyConnectionHandler
         {
             if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
             {
-                _logger.Information($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> {route.DestinationAddress}:{route.DestinationPort}");
+                _logger.Information($"{request.Method} {request.Host}:{request.Port} -> {route.DestinationAddress}:{route.DestinationPort}");
             }
 
             await upstream.ConnectAsync(route.DestinationAddress!, route.DestinationPort, cancellationToken)
@@ -167,7 +167,7 @@ public sealed class ProxyConnectionHandler
 
         if (_logMode == ConnectionLogMode.All)
         {
-            _logger.Information($"[{DateTimeOffset.Now:T}] {request.Method} {request.Host}:{request.Port} -> DNS");
+            _logger.Information($"{request.Method} {request.Host}:{request.Port} -> DNS");
         }
 
         await upstream.ConnectAsync(request.Host, request.Port, cancellationToken)

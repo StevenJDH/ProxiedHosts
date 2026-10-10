@@ -155,7 +155,7 @@ public sealed class HostMappingProvider : IDisposable
                 // Atomic publication of the completely parsed snapshot.
                 _mappings = nextMappings;
 
-                _logger.Information($"[{DateTimeOffset.Now:T}] Loaded {_mappings.Count} host mapping(s).");
+                _logger.Information($"Loaded {_mappings.Count} host mapping(s).");
 
                 MappingsReloaded?.Invoke();
             }
