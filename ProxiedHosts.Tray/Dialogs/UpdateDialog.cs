@@ -52,7 +52,9 @@ internal sealed class UpdateDialog : Window
             var noButton = new Button
             {
                 Content = "No",
-                MinWidth = 80
+                MinWidth = 80,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
 
             noButton.Click += (_, _) => Close();
@@ -60,7 +62,9 @@ internal sealed class UpdateDialog : Window
             var yesButton = new Button
             {
                 Content = "Yes",
-                MinWidth = 80
+                MinWidth = 80,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
 
             yesButton.Click += (_, _) =>
@@ -77,7 +81,9 @@ internal sealed class UpdateDialog : Window
             var okButton = new Button
             {
                 Content = "OK",
-                MinWidth = 80
+                MinWidth = 80,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
 
             okButton.Click += (_, _) => Close();
