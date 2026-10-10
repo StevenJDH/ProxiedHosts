@@ -25,6 +25,15 @@
 		<PublishReferencesSymbols>false</PublishReferencesSymbols>
 	</PropertyGroup>
 
+	<!-- Remove debugging symbols from Release publish output when above is ignored. -->
+	<Target Name="RemovePublishedPdbFiles" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release' and '$(PublishDir)' != ''">
+		<ItemGroup>
+			<_PublishedPdbFiles Include="$(PublishDir)**/*.pdb" />
+		</ItemGroup>
+
+		<Delete Files="@(_PublishedPdbFiles)" />
+	</Target>
+
 	<ItemGroup>
 		<AvaloniaResource Include="Assets/**" />
 	</ItemGroup>
