@@ -21,6 +21,7 @@ using ProxiedHosts.Core.Hosts;
 using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
 using ProxiedHosts.Core.Proxy;
+using System.Text.Json;
 using SystemConsole = System.Console;
 
 namespace ProxiedHosts.Console;
@@ -82,7 +83,7 @@ internal static class Program
 
             // Check for updates after displaying the startup information,
             // without delaying proxy startup or keyboard input.
-            _ = CheckForUpdatesAsync(currentVersion, logger, shutdown.Token);
+            _ = CheckForUpdatesAsync(currentVersion, logger, shutdown.Token, automatic: true);
 
             // Start the proxy asynchronously.
             var proxyTask = proxy.RunAsync(shutdown.Token);
@@ -160,17 +161,23 @@ internal static class Program
         }
     }
 
-    private static async Task CheckForUpdatesAsync(Version currentVersion, IProxyLogger logger, CancellationToken cancellationToken)
+    private static async Task CheckForUpdatesAsync(Version currentVersion, IProxyLogger logger, CancellationToken cancellationToken, bool automatic = false)
     {
         if (Interlocked.CompareExchange(ref _updateCheckRunning, 1, 0) != 0)
         {
-            logger.Warning("An update check is already in progress.");
+            if (!automatic)
+            {
+                logger.Warning("An update check is already in progress.");
+            }
             return;
         }
 
         try
         {
-            logger.Information("Checking for updates...");
+            if (!automatic)
+            {
+                logger.Information("Checking for updates...");
+            }
 
             // Console checks stable releases only.
             var update = await UpdateChecker.CheckAsync(currentVersion, includePreviewReleases: false, cancellationToken: cancellationToken);
@@ -182,7 +189,11 @@ internal static class Program
 
             if (update is null)
             {
-                logger.Information($"ProxiedHosts is up to date (v{currentVersion}).");
+                if (!automatic)
+                {
+                    logger.Information($"ProxiedHosts is up to date (v{currentVersion}).");
+                }
+
                 return;
             }
 
@@ -199,6 +210,10 @@ internal static class Program
         catch (HttpRequestException ex)
         {
             logger.Warning($"Unable to check for updates: {ex.Message}");
+        }
+        catch (JsonException ex)
+        {
+            logger.Warning($"Invalid GitHub response: {ex.Message}");
         }
         catch (Exception ex)
         {

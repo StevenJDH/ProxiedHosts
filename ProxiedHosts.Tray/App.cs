@@ -17,6 +17,7 @@
  */
 
 using System.Reflection;
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -128,7 +129,7 @@ public sealed class App : Application
             }
             catch (Exception ex)
             {
-                _logger?.Error($"Failed to update login startup: {ex}");
+                _logger?.Error($"Failed to update login startup: {ex.Message}");
             }
             finally
             {
@@ -138,7 +139,7 @@ public sealed class App : Application
                 }
                 catch (Exception ex)
                 {
-                    _logger?.Error($"Failed to read login startup status: {ex}");
+                    _logger?.Error($"Failed to read login startup status: {ex.Message}");
                     _startupItem!.IsChecked = false;
                 }
             }
@@ -179,7 +180,7 @@ public sealed class App : Application
             }
             catch (Exception ex)
             {
-                _logger?.Error($"Failed to open donation page: {ex}");
+                _logger?.Error($"Failed to open donation page: {ex.Message}");
             }
         };
 
@@ -401,7 +402,7 @@ public sealed class App : Application
                     }
                     catch (Exception ex)
                     {
-                        _logger?.Error($"Failed to open release page: {ex}");
+                        _logger?.Error($"Failed to open release page: {ex.Message}");
 
                         ShowUpdateDialog($"Unable to open the GitHub release page.\n\n{ex.Message}");
                     }
@@ -417,13 +418,13 @@ public sealed class App : Application
                 }
                 catch (Exception ex)
                 {
-                    _logger?.Warning($"Failed to save update notification state: {ex}");
+                    _logger?.Warning($"Failed to save update notification state: {ex.Message}");
                 }
             }
         }
         catch (TaskCanceledException ex)
         {
-            _logger?.Warning($"Update check timed out: {ex}");
+            _logger?.Warning($"Update check timed out: {ex.Message}");
 
             if (!automatic)
             {
@@ -432,7 +433,7 @@ public sealed class App : Application
         }
         catch (HttpRequestException ex)
         {
-            _logger?.Warning($"Update check failed: {ex}");
+            _logger?.Warning($"Update check failed: {ex.Message}");
 
             if (!automatic)
             {
@@ -443,9 +444,9 @@ public sealed class App : Application
                 ShowUpdateDialog(message);
             }
         }
-        catch (System.Text.Json.JsonException ex)
+        catch (JsonException ex)
         {
-            _logger?.Warning($"Invalid GitHub response: {ex}");
+            _logger?.Warning($"Invalid GitHub response: {ex.Message}");
 
             if (!automatic)
             {
@@ -454,7 +455,7 @@ public sealed class App : Application
         }
         catch (Exception ex)
         {
-            _logger?.Error($"Update check failed: {ex}");
+            _logger?.Error($"Update check failed: {ex.Message}");
 
             if (!automatic)
             {
