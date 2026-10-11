@@ -45,6 +45,9 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
     steps:
       - uses: actions/checkout@v7
         with:
@@ -64,11 +67,42 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
           restore-keys: ${{ runner.os }}-nuget
 
+      - name: Cache SonarCloud packages
+        if: matrix.os == 'ubuntu-latest' && env.SONAR_TOKEN != ''
+        uses: actions/cache@v6
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Install SonarScanner
+        if: matrix.os == 'ubuntu-latest' && env.SONAR_TOKEN != ''
+        run: dotnet tool install --global dotnet-sonarscanner
+
       - name: Restore
         run: dotnet restore "${{ env.SOLUTION_FILE }}"
+
+      - name: Begin SonarCloud analysis
+        if: matrix.os == 'ubuntu-latest' && env.SONAR_TOKEN != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any.
+        shell: bash
+        run: |
+          dotnet sonarscanner begin \
+            /k:"StevenJDH_ProxiedHosts" \
+            /o:"stevenjdh" \
+            /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.scanner.scanAll=false \
+            /d:sonar.coverage.exclusions="**/*.*"
 
       - name: Build
         run: >
           dotnet build "${{ env.SOLUTION_FILE }}"
           --configuration Debug
           --no-restore
+
+      - name: End SonarCloud analysis
+        if: matrix.os == 'ubuntu-latest' && env.SONAR_TOKEN != ''
+        shell: bash
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
