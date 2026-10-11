@@ -3,6 +3,15 @@
 [![build](https://github.com/StevenJDH/ProxiedHosts/actions/workflows/dotnet-build-workflow.yml/badge.svg)](https://github.com/StevenJDH/ProxiedHosts/actions/workflows/dotnet-build-workflow.yml)
 ![GitHub release (latest by date including pre-releases)](https://img.shields.io/github/v/release/StevenJDH/ProxiedHosts?include_prereleases)
 ![GitHub All Releases](https://img.shields.io/github/downloads/StevenJDH/ProxiedHosts/total)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/eba24660853646288346f73ea9cfe368)](https://app.codacy.com/gh/StevenJDH/ProxiedHosts/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=StevenJDH_ProxiedHosts&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=StevenJDH_ProxiedHosts)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=StevenJDH_ProxiedHosts&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=StevenJDH_ProxiedHosts)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=StevenJDH_ProxiedHosts&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=StevenJDH_ProxiedHosts)
+[![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=StevenJDH_ProxiedHosts&metric=sqale_index)](https://sonarcloud.io/summary/new_code?id=StevenJDH_ProxiedHosts)
+[![Sonar Violations (long format)](https://img.shields.io/sonar/violations/StevenJDH_ProxiedHosts?format=long&server=https%3A%2F%2Fsonarcloud.io)](https://sonarcloud.io/summary/new_code?id=StevenJDH_ProxiedHosts)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=StevenJDH_ProxiedHosts&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=StevenJDH_ProxiedHosts)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=StevenJDH_ProxiedHosts&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=StevenJDH_ProxiedHosts)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=StevenJDH_ProxiedHosts&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=StevenJDH_ProxiedHosts)
 ![Maintenance](https://img.shields.io/badge/yes-4FCA21?label=maintained&style=flat)
 ![GitHub](https://img.shields.io/github/license/StevenJDH/ProxiedHosts)
 
@@ -70,8 +79,8 @@ With the proxy configuration in hand, configure the client application or system
 ### Proxy port generation
 On first run, the application selects an unused port in the range `20000-45000` and writes it to:
 
-- Windows: `%LOCALAPPDATA%\ProxiedHosts\proxy.port`.
-- Other platforms: the .NET local-application-data location for the current user.
+* Windows: `%LOCALAPPDATA%\ProxiedHosts\proxy.port`.
+* Other platforms: the .NET local-application-data location for the current user.
 
 On later runs, the same port is reused. If another process is already using that port, the proxy exits with an error instead of silently changing ports. Delete `proxy.port` if a new port is needed.
 
