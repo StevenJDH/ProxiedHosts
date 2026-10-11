@@ -39,7 +39,7 @@ public sealed class ProxyServer
         // Explicitly stop the listener when cancellation is requested. This is
         // important because it guarantees that a pending AcceptTcpClientAsync
         // is unblocked immediately on Ctrl+C.
-        using var cancellationRegistration = cancellationToken.Register(() =>
+        await using var cancellationRegistration = cancellationToken.Register(() =>
         {
             try
             {

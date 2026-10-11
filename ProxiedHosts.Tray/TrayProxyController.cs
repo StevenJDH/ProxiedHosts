@@ -92,7 +92,7 @@ internal sealed class TrayProxyController
 
         _hostMappings!.MappingsReloaded -= OnMappingsReloaded;
         _proxyState!.Changed -= OnProxyStateChanged;
-        _shutdown.Cancel();
+        await _shutdown.CancelAsync();
 
         if (_runTask is not null)
         {
