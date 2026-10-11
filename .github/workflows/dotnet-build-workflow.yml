@@ -5,14 +5,14 @@ on:
     branches:
     - main
     paths-ignore:
-    - '*.md'
-    - '*.png'
+    - '**/*.md'
+    - '**/*.png'
   pull_request:
     branches:
     - main
     paths-ignore:
-    - '*.md'
-    - '*.png'
+    - '**/*.md'
+    - '**/*.png'
     types: [opened, synchronize, reopened] # https://docs.github.com/en/free-pro-team@latest/actions/reference/events-that-trigger-workflows#pull_request
   workflow_dispatch:
     inputs:
