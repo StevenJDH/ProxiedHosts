@@ -6,6 +6,7 @@
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<RootNamespace>ProxiedHosts.Console</RootNamespace>
 		<AssemblyName>proxiedhosts</AssemblyName>
+		<ApplicationIcon>..\ProxiedHosts.Tray\Assets\ProxiedHosts.ico</ApplicationIcon>
 		<!-- Set as false to see full analysis details. Default is true. -->
 		<TrimmerSingleWarn>true</TrimmerSingleWarn>
 	</PropertyGroup>
