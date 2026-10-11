@@ -29,16 +29,29 @@ public sealed record AvailableUpdate(Version Version, string Url, bool IsPreview
 /// </summary>
 public static class UpdateChecker
 {
-    private const string ReleasesUrl = "https://api.github.com/repos/StevenJDH/ProxiedHosts/releases?per_page=100";
-
     private static readonly HttpClient Client = new()
     {
         Timeout = TimeSpan.FromSeconds(10)
     };
 
-    public static async Task<AvailableUpdate?> CheckAsync(Version currentVersion, bool includePreviewReleases, CancellationToken cancellationToken = default)
+    public static async Task<AvailableUpdate?> CheckAsync(Version currentVersion, string repositoryUrl, bool includePreviewReleases, CancellationToken cancellationToken = default)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, ReleasesUrl);
+        var repositoryUri = new Uri(repositoryUrl, UriKind.Absolute);
+
+        if (repositoryUri.Scheme != Uri.UriSchemeHttps || !string.Equals(repositoryUri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Expected a valid GitHub repository URL.", nameof(repositoryUrl));
+        }
+
+        var segments = repositoryUri.AbsolutePath.Trim('/').Split('/');
+
+        if (segments.Length != 2 || segments.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("Expected a GitHub repository URL containing an owner and repository.", nameof(repositoryUrl));
+        }
+
+        var releasesUrl = $"https://api.github.com/repos/{segments[0]}/{segments[1]}/releases?per_page=100";
+        using var request = new HttpRequestMessage(HttpMethod.Get, releasesUrl);
 
         request.Headers.UserAgent.Add(new ProductInfoHeaderValue("ProxiedHosts", "1.0"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));

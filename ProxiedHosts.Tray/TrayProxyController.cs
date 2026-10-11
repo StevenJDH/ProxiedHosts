@@ -32,7 +32,6 @@ internal sealed class TrayProxyController
     private HostMappingProvider? _hostMappings;
     private ProxyState? _proxyState;
     private ProxyConnectionHandler? _connectionHandler;
-    private ProxyServer? _proxyServer;
     private ProxyConfiguration? _configuration;
     private Task? _runTask;
 
@@ -70,10 +69,12 @@ internal sealed class TrayProxyController
 
         _proxyState = new ProxyState();
         _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _configuration.ConnectionLogMode, _logger);
-        _proxyServer = new ProxyServer(_configuration.ListenAddress, Port, _connectionHandler);
         _hostMappings.MappingsReloaded += OnMappingsReloaded;
         _proxyState.Changed += OnProxyStateChanged;
-        _runTask = _proxyServer.RunAsync(_shutdown.Token);
+
+        var proxyServer = new ProxyServer(_configuration.ListenAddress, Port, _connectionHandler);
+
+        _runTask = proxyServer.RunAsync(_shutdown.Token);
 
         Changed?.Invoke();
     }
@@ -110,7 +111,6 @@ internal sealed class TrayProxyController
         _shutdown.Dispose();
 
         _runTask = null;
-        _proxyServer = null;
         _connectionHandler = null;
         _proxyState = null;
         _hostMappings = null;

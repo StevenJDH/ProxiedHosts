@@ -48,7 +48,6 @@ public sealed class App : Application
     private NativeMenuItem? _previewReleasesItem;
     private UpdateDialog? _updateDialog;
     private NativeMenuItem? _openHostsItem;
-    private NativeMenuItem? _openLogItem;
     private AboutDialog? _aboutDialog;
 
     private int _shutdownStarted;
@@ -135,12 +134,12 @@ public sealed class App : Application
             {
                 try
                 {
-                    _startupItem!.IsChecked = StartupManager.IsEnabled();
+                    _startupItem.IsChecked = StartupManager.IsEnabled();
                 }
                 catch (Exception ex)
                 {
                     _logger?.Error($"Failed to read login startup status: {ex.Message}");
-                    _startupItem!.IsChecked = false;
+                    _startupItem.IsChecked = false;
                 }
             }
         };
@@ -155,9 +154,9 @@ public sealed class App : Application
             OpenHostsFile();
         };
 
-        _openLogItem = new NativeMenuItem("Open log");
+        var openLogItem = new NativeMenuItem("Open log");
 
-        _openLogItem.Click += (_, _) =>
+        openLogItem.Click += (_, _) =>
         {
             OpenLogFile();
         };
@@ -209,7 +208,7 @@ public sealed class App : Application
             }
             finally
             {
-                _previewReleasesItem!.IsChecked = _settings.IncludePreviewReleases;
+                _previewReleasesItem.IsChecked = _settings.IncludePreviewReleases;
             }
         };
 
@@ -228,8 +227,8 @@ public sealed class App : Application
 
                 new NativeMenuItemSeparator(),
 
-                _checkUpdatesItem!,
-                _previewReleasesItem!,
+                _checkUpdatesItem,
+                _previewReleasesItem,
 
                 new NativeMenuItemSeparator(),
 
@@ -257,7 +256,7 @@ public sealed class App : Application
             new NativeMenuItemSeparator(),
 
             _openHostsItem,
-            _openLogItem,
+            openLogItem,
 
             new NativeMenuItemSeparator(),
 
@@ -354,8 +353,15 @@ public sealed class App : Application
 
         try
         {
-            var currentVersion = typeof(App).Assembly.GetName().Version ?? throw new InvalidOperationException("Could not determine the installed version.");
-            var update = await UpdateChecker.CheckAsync(currentVersion, _settings.IncludePreviewReleases);
+            var assembly = typeof(Program).Assembly;
+            var currentVersion = assembly.GetName().Version ?? throw new InvalidOperationException("Could not determine the installed version.");
+            var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>();
+
+            var repositoryUrl = metadata
+                .FirstOrDefault(attribute => attribute.Key == "RepositoryUrl")?
+                .Value ?? throw new InvalidOperationException("Could not determine the repository URL.");
+
+            var update = await UpdateChecker.CheckAsync(currentVersion, repositoryUrl, _settings.IncludePreviewReleases);
 
             if (Volatile.Read(ref _shutdownStarted) != 0)
             {

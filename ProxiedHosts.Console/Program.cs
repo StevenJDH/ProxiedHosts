@@ -205,8 +205,13 @@ internal static class Program
                 logger.Information("Checking for updates...");
             }
 
+            var repositoryUrl = typeof(Program).Assembly
+                .GetCustomAttributes<AssemblyMetadataAttribute>()
+                .FirstOrDefault(attribute => attribute.Key == "RepositoryUrl")?
+                .Value ?? throw new InvalidOperationException("Could not determine the repository URL.");
+
             // Console checks stable releases only.
-            var update = await UpdateChecker.CheckAsync(currentVersion, includePreviewReleases: false, cancellationToken: cancellationToken);
+            var update = await UpdateChecker.CheckAsync(currentVersion, repositoryUrl, includePreviewReleases: false, cancellationToken: cancellationToken);
 
             if (cancellationToken.IsCancellationRequested)
             {

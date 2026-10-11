@@ -132,21 +132,24 @@ internal static class StartupManager
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
+        const string KeyElementName = "key";
+        const string StringElementName = "string";
+
         var plist = new XDocument(new XDeclaration("1.0", "UTF-8", null),
             new XDocumentType("plist", "-//Apple//DTD PLIST 1.0//EN", "http://www.apple.com/DTDs/PropertyList-1.0.dtd", null),
             new XElement("plist", new XAttribute("version", "1.0"),
                 new XElement("dict",
-                    new XElement("key", "Label"),
-                    new XElement("string", "io.github.stevenjdh.proxiedhosts"),
-                    new XElement("key", "ProgramArguments"),
+                    new XElement(KeyElementName, "Label"),
+                    new XElement(StringElementName, "io.github.stevenjdh.proxiedhosts"),
+                    new XElement(KeyElementName, "ProgramArguments"),
                     new XElement("array",
-                        new XElement("string", "/usr/bin/open"),
-                        new XElement("string", "-a"),
-                        new XElement("string", appPath)),
-                    new XElement("key", "RunAtLoad"),
+                        new XElement(StringElementName, "/usr/bin/open"),
+                        new XElement(StringElementName, "-a"),
+                        new XElement(StringElementName, appPath)),
+                    new XElement(KeyElementName, "RunAtLoad"),
                     new XElement("true"),
-                    new XElement("key", "LimitLoadToSessionType"),
-                    new XElement("string", "Aqua"))));
+                    new XElement(KeyElementName, "LimitLoadToSessionType"),
+                    new XElement(StringElementName, "Aqua"))));
 
         plist.Save(path);
     }

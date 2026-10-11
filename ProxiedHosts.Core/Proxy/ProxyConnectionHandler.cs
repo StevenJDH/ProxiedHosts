@@ -114,10 +114,8 @@ public sealed class ProxyConnectionHandler
 
         var route = ResolveRoute(request.Host, request.Port);
 
-        using var upstream = new TcpClient
-        {
-            NoDelay = true
-        };
+        using var upstream = new TcpClient();
+        upstream.NoDelay = true;
 
         _activeConnections[client] = new ActiveConnection(client, upstream, request.Host, request.Port, route);
 
@@ -152,26 +150,33 @@ public sealed class ProxyConnectionHandler
 
     private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, CancellationToken cancellationToken)
     {
-        if (route.IsMapped)
+        using var connectCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        connectCancellation.CancelAfter(ConnectTimeout);
+
+        try
         {
-            if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
+            if (route.IsMapped)
             {
-                _logger.Information($"{request.Method} {request.Host}:{request.Port} -> {route.DestinationAddress}:{route.DestinationPort}");
+                if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
+                {
+                    _logger.Information($"{request.Method} {request.Host}:{request.Port} -> {route.DestinationAddress}:{route.DestinationPort}");
+                }
+
+                await upstream.ConnectAsync(route.DestinationAddress!, route.DestinationPort, connectCancellation.Token);
+                return;
             }
 
-            await upstream.ConnectAsync(route.DestinationAddress!, route.DestinationPort, cancellationToken)
-                .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
+            if (_logMode == ConnectionLogMode.All)
+            {
+                _logger.Information($"{request.Method} {request.Host}:{request.Port} -> DNS");
+            }
 
-            return;
+            await upstream.ConnectAsync(request.Host, request.Port, connectCancellation.Token);
         }
-
-        if (_logMode == ConnectionLogMode.All)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            _logger.Information($"{request.Method} {request.Host}:{request.Port} -> DNS");
+            throw new TimeoutException("Upstream connection timed out.");
         }
-
-        await upstream.ConnectAsync(request.Host, request.Port, cancellationToken)
-            .AsTask().WaitAsync(ConnectTimeout, cancellationToken);
     }
 
     private static async Task RelayBidirectionalAsync(NetworkStream client, NetworkStream upstream, CancellationToken cancellationToken)

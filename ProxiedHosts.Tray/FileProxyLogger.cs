@@ -106,9 +106,11 @@ internal sealed class FileProxyLogger : IProxyLogger
         var archivePath = Path.Combine(_directory, $"{archiveName}.zip");
 
         // Avoid overwriting an archive if timestamps collide.
-        for (var suffix = 1; File.Exists(archivePath); suffix++)
+        var suffix = 1;
+
+        while (File.Exists(archivePath))
         {
-            archivePath = Path.Combine(_directory, $"{archiveName}-{suffix}.zip");
+            archivePath = Path.Combine(_directory, $"{archiveName}-{suffix++}.zip");
         }
 
         var temporaryPath = archivePath + ".tmp";
