@@ -268,19 +268,21 @@ internal static class Program
             .FirstOrDefault(attribute => attribute.Key == "RepositoryUrl")?
             .Value ?? string.Empty;
 
-        SystemConsole.WriteLine();
-        SystemConsole.WriteLine($"About {product}");
-        SystemConsole.WriteLine("------------------");
-        SystemConsole.WriteLine($"Version   : {version}");
-        SystemConsole.WriteLine($"Author    : {authors}");
-        SystemConsole.WriteLine($"Copyright : {copyright} {authors}");
-        SystemConsole.WriteLine("License   : GNU General Public License v3 or later");
-        SystemConsole.WriteLine($"Source    : {repositoryUrl}");
-        SystemConsole.WriteLine();
-        SystemConsole.WriteLine($"{product} is free software: you can redistribute it and/or modify it");
-        SystemConsole.WriteLine("under the terms of the GNU General Public License as published by the");
-        SystemConsole.WriteLine("Free Software Foundation, either version 3 of the License, or (at your");
-        SystemConsole.WriteLine("option) any later version.");
-        SystemConsole.WriteLine();
+        SystemConsole.WriteLine($"""
+
+                                 About {product}
+                                 ------------------
+                                 Version   : {version}
+                                 Author    : {authors}
+                                 Copyright : {copyright} {authors}
+                                 License   : GNU General Public License v3 or later.
+                                 Source    : {repositoryUrl}
+
+                                 {product} is free software: you can redistribute it and/or modify it
+                                 under the terms of the GNU General Public License as published by the
+                                 Free Software Foundation, either version 3 of the License, or (at your
+                                 option) any later version.
+
+                                 """);
     }
 }
