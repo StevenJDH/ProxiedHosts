@@ -137,6 +137,14 @@ public sealed class ProxyConnectionHandler
             var established = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ProxiedHosts\r\n\r\n");
 
             await clientStream.WriteAsync(established, cancellationToken);
+
+            // Forward any tunnel data received alongside the CONNECT headers.
+            var headerEnd = requestHeader.AsSpan().IndexOf("\r\n\r\n"u8) + 4;
+
+            if (headerEnd < requestHeader.Length)
+            {
+                await upstreamStream.WriteAsync(requestHeader.AsMemory(headerEnd), cancellationToken);
+            }
         }
         else
         {
