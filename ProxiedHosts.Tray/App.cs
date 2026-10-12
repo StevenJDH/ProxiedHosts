@@ -28,6 +28,8 @@ using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Tray.Configuration;
 using ProxiedHosts.Tray.Dialogs;
 using ProxiedHosts.Tray.Infrastructure;
+using ProxiedHosts.Tray.Logging;
+using ProxiedHosts.Tray.Proxy;
 
 namespace ProxiedHosts.Tray;
 

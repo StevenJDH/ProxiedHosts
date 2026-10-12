@@ -22,7 +22,7 @@ using System.Text;
 using ProxiedHosts.Core.Configuration;
 using ProxiedHosts.Core.Logging;
 
-namespace ProxiedHosts.Tray;
+namespace ProxiedHosts.Tray.Logging;
 
 internal sealed class FileProxyLogger : IProxyLogger
 {

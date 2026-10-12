@@ -19,7 +19,7 @@
 using ProxiedHosts.Core.Logging;
 using SystemConsole = System.Console;
 
-namespace ProxiedHosts.Console;
+namespace ProxiedHosts.Console.Infrastructure;
 
 /// <summary>
 /// Handles Ctrl+C and unregisters the console event during shutdown.

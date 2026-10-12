@@ -18,7 +18,7 @@
 
 using ProxiedHosts.Core.Logging;
 
-namespace ProxiedHosts.Console;
+namespace ProxiedHosts.Console.Logging;
 
 internal sealed class ConsoleProxyLogger : IProxyLogger
 {

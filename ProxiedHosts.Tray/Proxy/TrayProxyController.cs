@@ -22,7 +22,7 @@ using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
 using ProxiedHosts.Core.Proxy;
 
-namespace ProxiedHosts.Tray;
+namespace ProxiedHosts.Tray.Proxy;
 
 internal sealed class TrayProxyController
 {
