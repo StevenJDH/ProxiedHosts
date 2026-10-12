@@ -16,6 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 
@@ -23,6 +24,8 @@ namespace ProxiedHosts.Core.Proxy;
 
 public sealed class ProxyServer
 {
+    private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(10);
+
     private readonly TcpListener _listener;
     private readonly ProxyConnectionHandler _connectionHandler;
 
@@ -34,13 +37,17 @@ public sealed class ProxyServer
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        using var clientShutdown = new CancellationTokenSource();
+        var activeClients = new ConcurrentDictionary<TcpClient, Task>();
+
         try
         {
             _listener.Start();
 
             // Explicitly stop the listener when cancellation is requested. This is
             // important because it guarantees that a pending AcceptTcpClientAsync
-            // is unblocked immediately on Ctrl+C.
+            // is unblocked immediately on Ctrl+C. Also, it is used for stopping to
+            // accept new connections when shutdown is requested.
             await using var cancellationRegistration = cancellationToken.Register(() =>
             {
                 try
@@ -49,7 +56,7 @@ public sealed class ProxyServer
                 }
                 catch
                 {
-                    // The listener may already be stopped during shutdown.
+                    // The listener may already be stopped.
                 }
             });
 
@@ -59,6 +66,7 @@ public sealed class ProxyServer
 
                 try
                 {
+                    // ReSharper disable once PossiblyMistakenUseOfCancellationToken
                     client = await _listener.AcceptTcpClientAsync(cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -74,12 +82,57 @@ public sealed class ProxyServer
                     break;
                 }
 
-                _ = _connectionHandler.HandleClientSafelyAsync(client, cancellationToken);
+                // Client connections have their own cancellation lifetime.
+                var task = _connectionHandler.HandleClientSafelyAsync(client, clientShutdown.Token);
+
+                activeClients[client] = task;
+
+                // Remove completed tasks so tracking does not grow indefinitely.
+                _ = task.ContinueWith(completed =>
+                {
+                    activeClients.TryRemove(client, out _);
+
+                    // Observe any unexpected exception from the task itself.
+                    _ = completed.Exception;
+                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
         }
         finally
         {
             _listener.Stop();
+
+            // No new clients can be accepted. Allow current ones to finish.
+            var tasks = activeClients.Values.ToArray();
+
+            if (tasks.Length > 0)
+            {
+                var allClients = Task.WhenAll(tasks);
+
+                try
+                {
+                    await allClients.WaitAsync(DrainTimeout, CancellationToken.None);
+                }
+                catch (TimeoutException) when (!allClients.IsCompleted)
+                {
+                    // Grace period expired. Force remaining clients to stop.
+                    await clientShutdown.CancelAsync();
+
+                    foreach (var client in activeClients.Keys)
+                    {
+                        try
+                        {
+                            client.Close();
+                        }
+                        catch
+                        {
+                            // Closing connections during shutdown is best-effort.
+                        }
+                    }
+
+                    // Observe completion and finish cleanup before returning.
+                    await allClients;
+                }
+            }
         }
     }
 }
