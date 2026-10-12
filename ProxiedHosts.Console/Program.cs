@@ -24,6 +24,8 @@ using ProxiedHosts.Core.Proxy;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using ProxiedHosts.Console.Infrastructure;
+using ProxiedHosts.Console.Logging;
 using SystemConsole = System.Console;
 
 namespace ProxiedHosts.Console;
