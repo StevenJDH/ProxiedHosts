@@ -43,6 +43,7 @@ public sealed class ProxyConnectionHandler
     private const int MaxHeaderBytes = 64 * 1024;
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan HeaderReadTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(5);
 
     private readonly HostMappingProvider _hostMappings;
     private readonly ProxyState _proxyState;
@@ -203,8 +204,11 @@ public sealed class ProxyConnectionHandler
 
     private static async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream, CancellationToken cancellationToken)
     {
-        var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, cancellationToken);
-        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, cancellationToken);
+        using var idleCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        idleCancellation.CancelAfter(IdleTimeout);
+
+        var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, idleCancellation);
+        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, idleCancellation);
         var firstCompleted = await Task.WhenAny(clientToUpstream, upstreamToClient);
 
         if (!firstCompleted.IsCompletedSuccessfully)
@@ -214,12 +218,19 @@ public sealed class ProxyConnectionHandler
             upstream.Close();
         }
 
-        await Task.WhenAll(clientToUpstream, upstreamToClient);
+        try
+        {
+            await Task.WhenAll(clientToUpstream, upstreamToClient);
+        }
+        catch (OperationCanceledException) when (idleCancellation.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            // Connection was idle for too long.
+        }
     }
-
-    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationToken cancellationToken)
+    
+    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationTokenSource idleCancellation)
     {
-        await PumpAsync(source, destination, cancellationToken);
+        await PumpAsync(source, destination, idleCancellation);
 
         try
         {
@@ -232,9 +243,10 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private static async Task PumpAsync(Stream source, Stream destination, CancellationToken cancellationToken)
+    private static async Task PumpAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(32 * 1024);
+        var cancellationToken = idleCancellation.Token;
 
         try
         {
@@ -248,6 +260,9 @@ public sealed class ProxyConnectionHandler
                 }
 
                 await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+
+                // Activity in either direction resets the shared timeout.
+                idleCancellation.CancelAfter(IdleTimeout);
             }
         }
         finally
