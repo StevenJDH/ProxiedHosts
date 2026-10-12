@@ -102,55 +102,10 @@ public sealed class HostMappingProvider : IDisposable
                 if (!File.Exists(_filePath))
                 {
                     _logger.Error($"Hosts file not found: {_filePath}");
-
                     return;
                 }
 
-                var nextMappings = new Dictionary<string, HostMapping>(StringComparer.OrdinalIgnoreCase);
-                var lines = File.ReadAllLines(_filePath);
-
-                for (var i = 0; i < lines.Length; i++)
-                {
-                    var raw = lines[i];
-                    var commentIndex = raw.IndexOf('#');
-
-                    if (commentIndex >= 0)
-                    {
-                        raw = raw[..commentIndex];
-                    }
-
-                    if (string.IsNullOrWhiteSpace(raw))
-                    {
-                        continue;
-                    }
-
-                    var parts = raw.Split((char[]?) null,
-                        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-                    if (parts.Length < 2)
-                    {
-                        _logger.Warning($"Ignoring invalid hosts entry on line {i + 1}: expected '<ip> <hostname>'.");
-                        continue;
-                    }
-
-                    if (!TryParseEndpoint(parts[0], out var ip, out var port))
-                    {
-                        _logger.Warning($"Ignoring invalid IP address or port '{parts[0]}' on line {i + 1}.");
-                        continue;
-                    }
-
-                    for (var j = 1; j < parts.Length; j++)
-                    {
-                        if (!TryParseHost(parts[j], out var host, out var matchPort))
-                        {
-                            _logger.Warning($"Ignoring invalid hostname or port '{parts[j]}' on line {i + 1}.");
-
-                            continue;
-                        }
-
-                        nextMappings[GetMappingKey(host, matchPort)] = new HostMapping(host, ip!, port, matchPort);
-                    }
-                }
+                var nextMappings = ParseMappings(File.ReadAllLines(_filePath));
 
                 // Atomic publication of the completely parsed snapshot.
                 _mappings = nextMappings;
@@ -167,6 +122,58 @@ public sealed class HostMappingProvider : IDisposable
             {
                 _logger.Error($"Could not access hosts file: {ex.Message}");
             }
+        }
+    }
+
+    private Dictionary<string, HostMapping> ParseMappings(string[] lines)
+    {
+        var nextMappings = new Dictionary<string, HostMapping>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            ParseMappingLine(lines[i], i + 1, nextMappings);
+        }
+
+        return nextMappings;
+    }
+
+    private void ParseMappingLine(string raw, int lineNumber, Dictionary<string, HostMapping> mappings)
+    {
+        var commentIndex = raw.IndexOf('#');
+
+        if (commentIndex >= 0)
+        {
+            raw = raw[..commentIndex];
+        }
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return;
+        }
+
+        var parts = raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length < 2)
+        {
+            _logger.Warning($"Ignoring invalid hosts entry on line {lineNumber}: expected '<ip> <hostname>'.");
+            return;
+        }
+
+        if (!TryParseEndpoint(parts[0], out var ip, out var port))
+        {
+            _logger.Warning($"Ignoring invalid IP address or port '{parts[0]}' on line {lineNumber}.");
+            return;
+        }
+
+        for (var j = 1; j < parts.Length; j++)
+        {
+            if (!TryParseHost(parts[j], out var host, out var matchPort))
+            {
+                _logger.Warning($"Ignoring invalid hostname or port '{parts[j]}' on line {lineNumber}.");
+                continue;
+            }
+
+            mappings[GetMappingKey(host, matchPort)] = new HostMapping(host, ip!, port, matchPort);
         }
     }
 

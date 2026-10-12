@@ -368,110 +368,119 @@ public sealed class App : Application
                 return;
             }
 
-            if (update is null)
-            {
-                if (!automatic)
-                {
-                    ShowUpdateDialog($"ProxiedHosts is up to date.\n\nInstalled version: {currentVersion}");
-                }
-
-                return;
-            }
-
-            // Automatic checks notify only once per release version.
-            if (automatic && _settings.WasNotified(update.Version, update.IsPreview))
-            {
-                return;
-            }
-
-            // Avoid opening a second dialog if another is already visible.
-            if (_updateDialog is not null)
-            {
-                return;
-            }
-
-            var releaseType = update.IsPreview ? "preview version" : "version";
-
-            ShowUpdateDialog($"""
-                A new {releaseType} of ProxiedHosts is available.
-                         
-                Installed version: {currentVersion}
-                Available version: {update.Version}
-                  
-                "Would you like to open the GitHub release page?"
-                """,
-                () =>
-                {
-                    try
-                    {
-                        FileLauncher.OpenUrl(update.Url);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.Error($"Failed to open release page: {ex.Message}");
-
-                        ShowUpdateDialog($"Unable to open the GitHub release page.\n\n{ex.Message}");
-                    }
-                });
-
-            if (automatic)
-            {
-                // Remember that this release has already been announced,
-                // regardless of whether the user chooses Yes or No.
-                try
-                {
-                    _settings.MarkNotified(update.Version, update.IsPreview);
-                }
-                catch (Exception ex)
-                {
-                    _logger?.Warning($"Failed to save update notification state: {ex.Message}");
-                }
-            }
-        }
-        catch (TaskCanceledException ex)
-        {
-            _logger?.Warning($"Update check timed out: {ex.Message}");
-
-            if (!automatic)
-            {
-                ShowUpdateDialog("The update check timed out.\n\nCheck the internet connection and try again.");
-            }
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger?.Warning($"Update check failed: {ex.Message}");
-
-            if (!automatic)
-            {
-                var message = ex.StatusCode is { } status
-                    ? $"GitHub returned HTTP {(int)status} ({status}).\n\nThe update check could not be completed. Please try again later."
-                    : "Unable to connect to GitHub.\n\nCheck the internet connection and try again.";
-
-                ShowUpdateDialog(message);
-            }
-        }
-        catch (JsonException ex)
-        {
-            _logger?.Warning($"Invalid GitHub response: {ex.Message}");
-
-            if (!automatic)
-            {
-                ShowUpdateDialog("GitHub returned an invalid response.\n\nPlease try again later.");
-            }
+            HandleUpdateResult(update, currentVersion, automatic);
         }
         catch (Exception ex)
         {
-            _logger?.Error($"Update check failed: {ex.Message}");
-
-            if (!automatic)
-            {
-                ShowUpdateDialog($"An unexpected error occurred while checking for updates.\n\n{ex.Message}");
-            }
+            HandleUpdateCheckError(ex, automatic);
         }
         finally
         {
             _checkUpdatesItem.IsEnabled = true;
             _previewReleasesItem.IsEnabled = true;
+        }
+    }
+
+    private void HandleUpdateResult(AvailableUpdate? update, Version currentVersion, bool automatic)
+    {
+        if (update is null)
+        {
+            if (!automatic)
+            {
+                ShowUpdateDialog($"ProxiedHosts is up to date.\n\nInstalled version: {currentVersion}");
+            }
+
+            return;
+        }
+
+        // Automatic checks notify only once per release version.
+        if (automatic && _settings.WasNotified(update.Version, update.IsPreview))
+        {
+            return;
+        }
+
+        // Avoid opening a second dialog if another is already visible.
+        if (_updateDialog is not null)
+        {
+            return;
+        }
+
+        var releaseType = update.IsPreview ? "preview version" : "version";
+
+        ShowUpdateDialog($"""
+                          A new {releaseType} of ProxiedHosts is available.
+                                   
+                          Installed version: {currentVersion}
+                          Available version: {update.Version}
+                            
+                          "Would you like to open the GitHub release page?"
+                          """,
+            () => OpenReleasePage(update.Url));
+
+        if (!automatic)
+        {
+            return;
+        }
+
+        // Remember that this release has already been announced,
+        // regardless of whether the user chooses Yes or No.
+        try
+        {
+            _settings.MarkNotified(update.Version, update.IsPreview);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning($"Failed to save update notification state: {ex.Message}");
+        }
+    }
+    
+    private void OpenReleasePage(string url)
+    {
+        try
+        {
+            FileLauncher.OpenUrl(url);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error($"Failed to open release page: {ex.Message}");
+
+            ShowUpdateDialog($"Unable to open the GitHub release page.\n\n{ex.Message}");
+        }
+    }
+
+    private void HandleUpdateCheckError(Exception ex, bool automatic)
+    {
+        string message;
+
+        switch (ex)
+        {
+            case TaskCanceledException:
+                _logger?.Warning($"Update check timed out: {ex.Message}");
+                message = "The update check timed out.\n\nCheck the internet connection and try again.";
+                break;
+
+            case HttpRequestException httpEx:
+                _logger?.Warning($"Update check failed: {httpEx.Message}");
+
+                message = httpEx.StatusCode is { } status
+                    ? $"GitHub returned HTTP {(int)status} ({status}).\n\nThe update check could not be completed. Please try again later."
+                    : "Unable to connect to GitHub.\n\nCheck the internet connection and try again.";
+                break;
+
+            case JsonException:
+                _logger?.Warning($"Invalid GitHub response: {ex.Message}");
+                message = "GitHub returned an invalid response.\n\nPlease try again later.";
+                break;
+
+            default:
+                _logger?.Error($"Update check failed: {ex.Message}");
+                message = $"An unexpected error occurred while checking for updates.\n\n{ex.Message}";
+                break;
+        }
+
+        if (!automatic)
+        {
+            ShowUpdateDialog(message);
         }
     }
 

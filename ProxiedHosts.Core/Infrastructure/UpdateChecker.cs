@@ -36,6 +36,25 @@ public static class UpdateChecker
 
     public static async Task<AvailableUpdate?> CheckAsync(Version currentVersion, string repositoryUrl, bool includePreviewReleases, CancellationToken cancellationToken = default)
     {
+        var releasesUrl = GetReleasesUrl(repositoryUrl);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, releasesUrl);
+
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("ProxiedHosts", "1.0"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+
+        using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        return FindLatestUpdate(document.RootElement, currentVersion, includePreviewReleases);
+    }
+
+    private static string GetReleasesUrl(string repositoryUrl)
+    {
         var repositoryUri = new Uri(repositoryUrl, UriKind.Absolute);
 
         if (repositoryUri.Scheme != Uri.UriSchemeHttps || !string.Equals(repositoryUri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
@@ -50,55 +69,54 @@ public static class UpdateChecker
             throw new ArgumentException("Expected a GitHub repository URL containing an owner and repository.", nameof(repositoryUrl));
         }
 
-        var releasesUrl = $"https://api.github.com/repos/{segments[0]}/{segments[1]}/releases?per_page=100";
-        using var request = new HttpRequestMessage(HttpMethod.Get, releasesUrl);
+        return $"https://api.github.com/repos/{segments[0]}/{segments[1]}/releases?per_page=100";
+    }
 
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("ProxiedHosts", "1.0"));
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-
-        using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
-        response.EnsureSuccessStatusCode();
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-
+    private static AvailableUpdate? FindLatestUpdate(JsonElement root, Version currentVersion, bool includePreviewReleases)
+    {
         AvailableUpdate? latest = null;
 
-        foreach (var release in document.RootElement.EnumerateArray())
+        foreach (var release in root.EnumerateArray())
         {
-            if (release.GetProperty("draft").GetBoolean())
+            var update = GetAvailableUpdate(release, currentVersion, includePreviewReleases);
+
+            if (update is not null && (latest is null || update.Version > latest.Version))
             {
-                continue;
-            }
-
-            var isPreview = release.GetProperty("prerelease").GetBoolean();
-
-            if (isPreview && !includePreviewReleases)
-            {
-                continue;
-            }
-
-            var tag = release.GetProperty("tag_name").GetString();
-
-            if (string.IsNullOrWhiteSpace(tag) || !Version.TryParse(tag.TrimStart('v', 'V'), out var version) || version <= currentVersion)
-            {
-                continue;
-            }
-
-            var url = release.GetProperty("html_url").GetString();
-
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (latest is null || version > latest.Version)
-            {
-                latest = new AvailableUpdate(version, uri.AbsoluteUri, isPreview);
+                latest = update;
             }
         }
 
         return latest;
+    }
+
+    private static AvailableUpdate? GetAvailableUpdate(JsonElement release, Version currentVersion, bool includePreviewReleases)
+    {
+        if (release.GetProperty("draft").GetBoolean())
+        {
+            return null;
+        }
+
+        var isPreview = release.GetProperty("prerelease").GetBoolean();
+
+        if (isPreview && !includePreviewReleases)
+        {
+            return null;
+        }
+
+        var tag = release.GetProperty("tag_name").GetString();
+
+        if (string.IsNullOrWhiteSpace(tag) || !Version.TryParse(tag.TrimStart('v', 'V'), out var version) || version <= currentVersion)
+        {
+            return null;
+        }
+
+        var url = release.GetProperty("html_url").GetString();
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps || !string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return new AvailableUpdate(version, uri.AbsoluteUri, isPreview);
     }
 }
