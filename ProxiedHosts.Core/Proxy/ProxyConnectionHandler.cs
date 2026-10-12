@@ -42,6 +42,7 @@ public sealed class ProxyConnectionHandler
 
     private const int MaxHeaderBytes = 64 * 1024;
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan HeaderReadTimeout = TimeSpan.FromSeconds(15);
 
     private readonly HostMappingProvider _hostMappings;
     private readonly ProxyState _proxyState;
@@ -96,9 +97,23 @@ public sealed class ProxyConnectionHandler
     private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
     {
         client.NoDelay = true;
+
         await using var clientStream = client.GetStream();
 
-        var requestHeader = await HttpHeaderReader.ReadAsync(clientStream, MaxHeaderBytes, cancellationToken);
+        byte[]? requestHeader;
+
+        try
+        {
+            using var headerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            headerCancellation.CancelAfter(HeaderReadTimeout);
+            requestHeader = await HttpHeaderReader.ReadAsync(clientStream, MaxHeaderBytes, headerCancellation.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            await WriteErrorAsync(clientStream, 408, "Request Timeout", "Timed out waiting for request headers.", cancellationToken);
+            return;
+        }
 
         if (requestHeader is null)
         {
@@ -107,8 +122,7 @@ public sealed class ProxyConnectionHandler
 
         if (!ProxyRequest.TryParse(requestHeader, out var request, out var parseError))
         {
-            await WriteErrorAsync(clientStream, 400, "Bad Request", parseError ?? "Invalid proxy request.",
-                cancellationToken);
+            await WriteErrorAsync(clientStream, 400, "Bad Request", parseError ?? "Invalid proxy request.", cancellationToken);
             return;
         }
 
