@@ -52,7 +52,7 @@ internal sealed class TrayProxyController
         _logger = logger;
     }
 
-    public async Task StartAsync()
+    public async Task StartAsync(bool mappingsActive = true)
     {
         if (_shutdown is not null)
         {
@@ -68,6 +68,12 @@ internal sealed class TrayProxyController
         Port = await portProvider.GetOrCreateAvailablePortAsync(_shutdown.Token);
 
         _proxyState = new ProxyState();
+
+        if (!mappingsActive)
+        {
+            _proxyState.Toggle();
+        }
+
         _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _configuration.ConnectionLogMode, _logger);
         _hostMappings.MappingsReloaded += OnMappingsReloaded;
         _proxyState.Changed += OnProxyStateChanged;

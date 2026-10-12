@@ -104,14 +104,30 @@ public sealed class App : Application
         _mappingsItem = new NativeMenuItem("Mappings active")
         {
             ToggleType = MenuItemToggleType.CheckBox,
-
-            IsChecked = true,
+            IsChecked = _settings.MappingsActive,
             IsEnabled = false
         };
 
         _mappingsItem.Click += (_, _) =>
         {
-            _controller?.ToggleMappings();
+            if (_controller is null)
+            {
+                return;
+            }
+
+            try
+            {
+                _settings.SetMappingsActive(!_controller.IsActive);
+                _controller.ToggleMappings();
+            }
+            catch (Exception ex)
+            {
+                _logger?.Error($"Failed to change mappings state: {ex.Message}");
+            }
+            finally
+            {
+                _mappingsItem.IsChecked = _controller.IsActive;
+            }
         };
 
         _startupItem = new NativeMenuItem("Start at login")
@@ -292,7 +308,7 @@ public sealed class App : Application
     {
         try
         {
-            await _controller!.StartAsync();
+            await _controller!.StartAsync(_settings.MappingsActive);
 
             UpdateTrayState();
         }

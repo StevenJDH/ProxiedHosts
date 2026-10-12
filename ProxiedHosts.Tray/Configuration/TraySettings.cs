@@ -38,6 +38,8 @@ internal sealed class TraySettings
 
     public bool IncludePreviewReleases { get; private set; }
 
+    public bool MappingsActive { get; private set; } = true;
+
     public Version? LastNotifiedStableVersion { get; private set; }
 
     public Version? LastNotifiedPreviewVersion { get; private set; }
@@ -62,6 +64,11 @@ internal sealed class TraySettings
         if (root.TryGetProperty("includePreviewReleases", out var preview) && preview.ValueKind is JsonValueKind.True or JsonValueKind.False)
         {
             settings.IncludePreviewReleases = preview.GetBoolean();
+        }
+
+        if (root.TryGetProperty("mappingsActive", out var mappingsActive) && mappingsActive.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            settings.MappingsActive = mappingsActive.GetBoolean();
         }
 
         settings.LastNotifiedStableVersion = ReadVersion(root, "lastNotifiedStableVersion");
@@ -119,6 +126,22 @@ internal sealed class TraySettings
         }
     }
 
+    public void SetMappingsActive(bool active)
+    {
+        var previousValue = MappingsActive;
+        MappingsActive = active;
+
+        try
+        {
+            Save();
+        }
+        catch
+        {
+            MappingsActive = previousValue;
+            throw;
+        }
+    }
+
     private static Version? ReadVersion(JsonElement root, string name)
     {
         if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && Version.TryParse(value.GetString(), out var version))
@@ -138,6 +161,7 @@ internal sealed class TraySettings
 
         writer.WriteStartObject();
         writer.WriteBoolean("includePreviewReleases", IncludePreviewReleases);
+        writer.WriteBoolean("mappingsActive", MappingsActive);
 
         if (LastNotifiedStableVersion is not null)
         {
