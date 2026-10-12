@@ -43,6 +43,8 @@ internal sealed class TrayProxyController
 
     public bool IsActive => _proxyState?.IsActive ?? false;
 
+    public bool HasFailed { get; private set; }
+
     public string HostsFilePath => _configuration?.HostsFilePath ?? string.Empty;
 
     public string ProxyAddress => _configuration is null ? string.Empty : $"http://{_configuration.ListenAddress}:{Port}";
@@ -58,6 +60,8 @@ internal sealed class TrayProxyController
         {
             throw new InvalidOperationException("The proxy is already running.");
         }
+
+        HasFailed = false;
 
         try
         {
@@ -91,6 +95,9 @@ internal sealed class TrayProxyController
             }
 
             Changed?.Invoke();
+
+            // Observe failures that occur after startup.
+            _runTask = MonitorProxyAsync(_runTask, _shutdown.Token);
         }
         catch
         {
@@ -105,6 +112,44 @@ internal sealed class TrayProxyController
 
             throw;
         }
+    }
+
+
+    private async Task MonitorProxyAsync(Task proxyTask, CancellationToken cancellationToken)
+    {
+        Exception? failure = null;
+
+        try
+        {
+            await proxyTask;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Normal shutdown.
+            return;
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+
+        if (failure is not null)
+        {
+            _logger.Error($"Proxy task failed: {failure}");
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (failure is null)
+        {
+            _logger.Error("Proxy server stopped unexpectedly.");
+        }
+
+        HasFailed = true;
+        Changed?.Invoke();
     }
 
     public void ToggleMappings()
@@ -136,6 +181,10 @@ internal sealed class TrayProxyController
                 catch (OperationCanceledException)
                 {
                     // Normal shutdown.
+                }
+                catch (Exception) when (_runTask.IsFaulted)
+                {
+                    // A faulted proxy task must not prevent resource cleanup.
                 }
             }
         }

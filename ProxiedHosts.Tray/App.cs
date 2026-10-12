@@ -338,6 +338,18 @@ public sealed class App : Application
             return;
         }
 
+        if (_controller.HasFailed)
+        {
+            _statusItem!.Header = "Status: Failed";
+            _proxyItem!.Header = "Proxy: Stopped";
+            _mappingsItem!.IsChecked = false;
+            _mappingsItem.IsEnabled = false;
+            _openHostsItem!.IsEnabled = false;
+            _trayIcon!.ToolTipText = "ProxiedHosts - Failed";
+
+            return;
+        }
+
         _statusItem!.Header = _controller.IsActive ? "Status: Active" : "Status: Inactive";
         _proxyItem!.Header = $"Proxy: {_controller.ProxyAddress}";
         _mappingsItem!.Header = $"Enable mappings ({_controller.MappingCount})";
