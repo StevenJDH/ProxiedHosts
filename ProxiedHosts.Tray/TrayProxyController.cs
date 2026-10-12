@@ -59,30 +59,52 @@ internal sealed class TrayProxyController
             throw new InvalidOperationException("The proxy is already running.");
         }
 
-        _shutdown = new CancellationTokenSource();
-        _configuration = ProxyConfiguration.Instance;
-        _hostMappings = new HostMappingProvider(_configuration.HostsFilePath, _logger);
-
-        var portProvider = new PortProvider();
-
-        Port = await portProvider.GetOrCreateAvailablePortAsync(_shutdown.Token);
-
-        _proxyState = new ProxyState();
-
-        if (!mappingsActive)
+        try
         {
-            _proxyState.Toggle();
+            _shutdown = new CancellationTokenSource();
+            _configuration = ProxyConfiguration.Instance;
+            _hostMappings = new HostMappingProvider(_configuration.HostsFilePath, _logger);
+
+            var portProvider = new PortProvider();
+
+            Port = await portProvider.GetOrCreateAvailablePortAsync(_shutdown.Token);
+
+            _proxyState = new ProxyState();
+
+            if (!mappingsActive)
+            {
+                _proxyState.Toggle();
+            }
+
+            _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _configuration.ConnectionLogMode, _logger);
+            _hostMappings.MappingsReloaded += OnMappingsReloaded;
+            _proxyState.Changed += OnProxyStateChanged;
+
+            var proxyServer = new ProxyServer(_configuration.ListenAddress, Port, _connectionHandler);
+
+            _runTask = proxyServer.RunAsync(_shutdown.Token);
+
+            // Detect an immediate startup failure, such as a port binding error.
+            if (_runTask.IsCompleted)
+            {
+                await _runTask;
+            }
+
+            Changed?.Invoke();
         }
+        catch
+        {
+            try
+            {
+                await StopAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to clean up after proxy startup error: {ex}");
+            }
 
-        _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _configuration.ConnectionLogMode, _logger);
-        _hostMappings.MappingsReloaded += OnMappingsReloaded;
-        _proxyState.Changed += OnProxyStateChanged;
-
-        var proxyServer = new ProxyServer(_configuration.ListenAddress, Port, _connectionHandler);
-
-        _runTask = proxyServer.RunAsync(_shutdown.Token);
-
-        Changed?.Invoke();
+            throw;
+        }
     }
 
     public void ToggleMappings()
@@ -97,31 +119,45 @@ internal sealed class TrayProxyController
             return;
         }
 
-        _hostMappings!.MappingsReloaded -= OnMappingsReloaded;
-        _proxyState!.Changed -= OnProxyStateChanged;
-        await _shutdown.CancelAsync();
+        var shutdown = _shutdown;
 
-        if (_runTask is not null)
+        try
+        {
+            _hostMappings?.MappingsReloaded -= OnMappingsReloaded;
+            _proxyState?.Changed -= OnProxyStateChanged;
+            await shutdown.CancelAsync();
+
+            if (_runTask is not null)
+            {
+                try
+                {
+                    await _runTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Normal shutdown.
+                }
+            }
+        }
+        finally
         {
             try
             {
-                await _runTask;
+                _hostMappings?.Dispose();
             }
-            catch (OperationCanceledException)
+            finally
             {
-                // Normal shutdown.
+                shutdown.Dispose();
+
+                _runTask = null;
+                _connectionHandler = null;
+                _proxyState = null;
+                _hostMappings = null;
+                _configuration = null;
+                _shutdown = null;
+                Port = 0;
             }
         }
-
-        _hostMappings.Dispose();
-        _shutdown.Dispose();
-
-        _runTask = null;
-        _connectionHandler = null;
-        _proxyState = null;
-        _hostMappings = null;
-        _configuration = null;
-        _shutdown = null;
     }
 
     private void OnMappingsReloaded()

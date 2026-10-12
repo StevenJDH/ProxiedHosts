@@ -34,28 +34,29 @@ public sealed class ProxyServer
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        _listener.Start();
-
-        // Explicitly stop the listener when cancellation is requested. This is
-        // important because it guarantees that a pending AcceptTcpClientAsync
-        // is unblocked immediately on Ctrl+C.
-        await using var cancellationRegistration = cancellationToken.Register(() =>
-        {
-            try
-            {
-                _listener.Stop();
-            }
-            catch
-            {
-                // The listener may already be stopped during shutdown.
-            }
-        });
-
         try
         {
+            _listener.Start();
+
+            // Explicitly stop the listener when cancellation is requested. This is
+            // important because it guarantees that a pending AcceptTcpClientAsync
+            // is unblocked immediately on Ctrl+C.
+            await using var cancellationRegistration = cancellationToken.Register(() =>
+            {
+                try
+                {
+                    _listener.Stop();
+                }
+                catch
+                {
+                    // The listener may already be stopped during shutdown.
+                }
+            });
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 TcpClient client;
+
                 try
                 {
                     client = await _listener.AcceptTcpClientAsync(cancellationToken);
