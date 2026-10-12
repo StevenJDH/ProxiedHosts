@@ -597,16 +597,31 @@ public sealed class App : Application
             return;
         }
 
-        if (_controller is not null)
+        try
         {
-            _controller.Changed -= OnControllerChanged;
+            if (_controller is not null)
+            {
+                _controller.Changed -= OnControllerChanged;
 
-            await _controller.StopAsync();
+                await _controller.StopAsync();
+            }
         }
-
-        _aboutDialog?.Close();
-        _updateDialog?.Close();
-        _trayIcon?.Dispose();
-        _desktop?.Shutdown();
+        catch (Exception ex)
+        {
+            _logger?.Error($"Failed to stop proxy during shutdown: {ex}");
+        }
+        finally
+        {
+            try
+            {
+                _aboutDialog?.Close();
+                _updateDialog?.Close();
+                _trayIcon?.Dispose();
+            }
+            finally
+            {
+                _desktop?.Shutdown();
+            }
+        }
     }
 }
