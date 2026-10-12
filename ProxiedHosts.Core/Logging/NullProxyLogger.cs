@@ -24,17 +24,21 @@ public sealed class NullProxyLogger : IProxyLogger
 
     private NullProxyLogger()
     {
+        // Prevent external instantiation.
     }
 
     public void Information(string message)
     {
+        // Intentionally ignored.
     }
 
     public void Warning(string message)
     {
+        // Intentionally ignored.
     }
 
     public void Error(string message)
     {
+        // Intentionally ignored.
     }
 }
