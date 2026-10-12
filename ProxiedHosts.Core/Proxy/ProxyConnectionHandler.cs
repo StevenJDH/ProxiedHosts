@@ -167,7 +167,7 @@ public sealed class ProxyConnectionHandler
             await upstreamStream.WriteAsync(rewrittenHeader, cancellationToken);
         }
 
-        await RelayBidirectionalAsync(clientStream, upstreamStream, cancellationToken);
+        await RelayBidirectionalAsync(client, upstream, clientStream, upstreamStream, cancellationToken);
     }
 
     private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, CancellationToken cancellationToken)
@@ -201,38 +201,34 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private static async Task RelayBidirectionalAsync(NetworkStream client, NetworkStream upstream, CancellationToken cancellationToken)
+    private static async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream, CancellationToken cancellationToken)
     {
-        var clientToUpstream = PumpAsync(client, upstream, cancellationToken);
-        var upstreamToClient = PumpAsync(upstream, client, cancellationToken);
+        var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, cancellationToken);
+        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, cancellationToken);
+        var firstCompleted = await Task.WhenAny(clientToUpstream, upstreamToClient);
 
-        await Task.WhenAny(clientToUpstream, upstreamToClient);
-
-        try
+        if (!firstCompleted.IsCompletedSuccessfully)
         {
+            // Unblock the other direction if a relay fails or is canceled.
             client.Close();
-        }
-        catch
-        {
-            // Connection may already be closed.
-        }
-
-        try
-        {
             upstream.Close();
         }
-        catch
-        {
-            // Connection may already be closed.
-        }
+
+        await Task.WhenAll(clientToUpstream, upstreamToClient);
+    }
+
+    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationToken cancellationToken)
+    {
+        await PumpAsync(source, destination, cancellationToken);
 
         try
         {
-            await Task.WhenAll(clientToUpstream, upstreamToClient);
+            // Signal EOF without closing the receiving direction.
+            destinationClient.Client.Shutdown(SocketShutdown.Send);
         }
-        catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+        catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
         {
-            // Expected when either side closes first.
+            // The destination may already be closed.
         }
     }
 
