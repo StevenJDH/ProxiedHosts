@@ -60,79 +60,92 @@ public sealed class ProxyServer
                 }
             });
 
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                TcpClient client;
-
-                try
-                {
-                    // ReSharper disable once PossiblyMistakenUseOfCancellationToken
-                    client = await _listener.AcceptTcpClientAsync(cancellationToken);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (SocketException) when (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                // Client connections have their own cancellation lifetime.
-                var task = _connectionHandler.HandleClientSafelyAsync(client, clientShutdown.Token);
-
-                activeClients[client] = task;
-
-                // Remove completed tasks so tracking does not grow indefinitely.
-                _ = task.ContinueWith(completed =>
-                {
-                    activeClients.TryRemove(client, out _);
-
-                    // Observe any unexpected exception from the task itself.
-                    _ = completed.Exception;
-                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-            }
+            await AcceptClientsAsync(cancellationToken, clientShutdown.Token, activeClients);
         }
         finally
         {
             _listener.Stop();
 
-            // No new clients can be accepted. Allow current ones to finish.
-            var tasks = activeClients.Values.ToArray();
+            // Allow active connections to finish before returning.
+            await DrainClientsAsync(activeClients, clientShutdown);
+        }
+    }
 
-            if (tasks.Length > 0)
+    private async Task AcceptClientsAsync(CancellationToken cancellationToken, CancellationToken clientCancellationToken, ConcurrentDictionary<TcpClient, Task> activeClients)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            TcpClient client;
+
+            try
             {
-                var allClients = Task.WhenAll(tasks);
+                // ReSharper disable once PossiblyMistakenUseOfCancellationToken
+                client = await _listener.AcceptTcpClientAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (SocketException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
 
+            // Client connections have their own cancellation lifetime.
+            var task = _connectionHandler.HandleClientSafelyAsync(client, clientCancellationToken);
+
+            activeClients[client] = task;
+
+            // Remove completed tasks so tracking does not grow indefinitely.
+            _ = task.ContinueWith(completed =>
+            {
+                activeClients.TryRemove(client, out _);
+
+                // Observe any unexpected exception from the task itself.
+                _ = completed.Exception;
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
+    }
+
+    private static async Task DrainClientsAsync(ConcurrentDictionary<TcpClient, Task> activeClients, CancellationTokenSource clientShutdown)
+    {
+        // No new clients can be accepted. Allow current ones to finish.
+        var tasks = activeClients.Values.ToArray();
+
+        if (tasks.Length == 0)
+        {
+            return;
+        }
+
+        var allClients = Task.WhenAll(tasks);
+
+        try
+        {
+            await allClients.WaitAsync(DrainTimeout, CancellationToken.None);
+        }
+        catch (TimeoutException) when (!allClients.IsCompleted)
+        {
+            // Grace period expired. Force remaining clients to stop.
+            await clientShutdown.CancelAsync();
+
+            foreach (var client in activeClients.Keys)
+            {
                 try
                 {
-                    await allClients.WaitAsync(DrainTimeout, CancellationToken.None);
+                    client.Close();
                 }
-                catch (TimeoutException) when (!allClients.IsCompleted)
+                catch
                 {
-                    // Grace period expired. Force remaining clients to stop.
-                    await clientShutdown.CancelAsync();
-
-                    foreach (var client in activeClients.Keys)
-                    {
-                        try
-                        {
-                            client.Close();
-                        }
-                        catch
-                        {
-                            // Closing connections during shutdown is best-effort.
-                        }
-                    }
-
-                    // Observe completion and finish cleanup before returning.
-                    await allClients;
+                    // Closing connections during shutdown is best-effort.
                 }
             }
+
+            // Observe completion and finish cleanup before returning.
+            await allClients;
         }
     }
 }
