@@ -352,6 +352,7 @@ public sealed class App : Application
         }
 
         int mappingCount = _controller.MappingCount;
+        string s = mappingCount > 1 ? "s" : "";
 
         _statusItem!.Header = _controller.IsActive ? "Status: Active" : "Status: Inactive";
         _proxyItem!.Header = $"Proxy: {_controller.ProxyAddress}";
@@ -359,7 +360,7 @@ public sealed class App : Application
         _mappingsItem.IsChecked = _controller.IsActive;
         _mappingsItem.IsEnabled = true;
         _openHostsItem!.IsEnabled = true;
-        _trayIcon!.ToolTipText = _controller.IsActive ? $"ProxiedHosts - Active ({mappingCount} mapping{(mappingCount > 1 ? "s" : "")})" : "ProxiedHosts - Inactive";
+        _trayIcon!.ToolTipText = _controller.IsActive ? $"ProxiedHosts - Active ({mappingCount} mapping{s}" : "ProxiedHosts - Inactive";
     }
 
     private async Task CheckForUpdatesAsync(bool automatic = false)
