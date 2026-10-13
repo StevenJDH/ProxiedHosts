@@ -49,8 +49,8 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 A console application and a system tray/menu bar variant of ProxiedHosts are provided as alternative options. For `proxiedhosts`, run the executable to see the printout of the proxy URL configuration, for example:
 
 ```text
-Proxy      : http://127.0.0.1:28741
-Port       : 28741 (stable and persisted)
+Proxy      : http://127.0.0.1:12345
+Port       : 12345 (stable and persisted)
 ```
 
 For `proxiedhosts-tray`, run the executable and right-click the icon in the system tray (or menu bar on macOS) to see the same proxy URL configuration, for example:
@@ -96,7 +96,7 @@ To test the proxy for a couple of features, add `127.0.0.1 example.com` to the p
 # The empty '--noproxy' value guarantees curl won't bypass the proxy because of `NO_PROXY` and `no_proxy`environment variables.
 curl http://example.com \
     --noproxy "" \
-    --proxy http://127.0.0.1:28741  \
+    --proxy http://127.0.0.1:12345  \
     -H "Connection: keep-alive" \
     -H "Proxy-Connection: keep-alive" \
     -v
@@ -105,8 +105,8 @@ curl http://example.com \
 🔳 **Output:**
 
 ```bash
-*   Trying 127.0.0.1:28741...
-* Established connection to 127.0.0.1 (127.0.0.1 port 28741) from 127.0.0.1 port 52780
+*   Trying 127.0.0.1:12345...
+* Established connection to 127.0.0.1 (127.0.0.1 port 12345) from 127.0.0.1 port 52780
 * using HTTP/1.x
 > GET http://example.com/ HTTP/1.1
 > Host: example.com
