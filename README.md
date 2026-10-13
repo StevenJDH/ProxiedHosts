@@ -21,24 +21,29 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 
 ## Features
 
-* Support Windows, Linux, and macOS (Intel/Apple Silicon) along with AOT compilation.
+* Supports Windows, Linux, and macOS (Intel/Apple Silicon) along with AOT compilation.
 * Custom hostname-to-IP mappings using a familiar hosts-file-style format.
 * Supports entries with ports to redirect requests.
-* Supports HTTP proxy requests.
-* Supports HTTPS tunneling via `CONNECT` without decrypting TLS.
+* No administrator privileges required for normal operation.
+* No modification of the system hosts file.
 * No custom root certificate or TLS interception required.
 * End-to-end TLS remains intact for HTTPS connections.
 * Binds only to `127.0.0.1`.
 * Generates a random port on first run and persists it for later runs.
 * Hot-reloads `proxiedhosts.txt` when it changes.
 * Automatically closes only affected connections when mappings change without disrupting unrelated traffic.
-* Keeps the previous valid mappings and ignores the invalid ones when reloading.
+* Loads valid mappings, ignores invalid entries, and retains previous mappings if reloading fails.
 * Automatic fallback to normal DNS resolution for unmapped hosts.
-* No administrator privileges required for normal operation.
-* No modification of the system hosts file.
 * Toggle proxy state to enable traffic passthrough without mapping requests.
 * Optionally start tray application on system login.
 * Automatic and manual update checking with option for preview releases.
+* Supports HTTP proxy requests and HTTPS tunneling via `CONNECT` without decrypting TLS.
+* Prevents incorrect HTTP connection reuse by enforcing `Connection: close` on requests and responses.
+* Preserves tunnel data received alongside `CONNECT` headers to prevent data loss.
+* Supports TCP half-close to allow remaining traffic to finish when one direction closes.
+* Enforces timeouts for incoming HTTP headers and upstream connection attempts.
+* Automatically closes idle connections after a set time without network activity.
+* Allows active connections to finish gracefully during shutdown before forcing them to close.
 
 ## Usage
 A console application and a system tray/menu bar variant of ProxiedHosts are provided as alternative options. For `proxiedhosts`, run the executable to see the printout of the proxy URL configuration, for example:
@@ -83,6 +88,44 @@ On first run, the application selects an unused port in the range `20000-45000` 
 * Other platforms: the .NET local-application-data location for the current user.
 
 On later runs, the same port is reused. If another process is already using that port, the proxy exits with an error instead of silently changing ports. Delete `proxy.port` if a new port is needed.
+
+### Technical test
+To test the proxy for a couple of features, add `127.0.0.1 example.com` to the proxiedhosts.txt file. Then run the following command after updating `--proxy` with the actual proxy port:
+
+```bash
+# The empty '--noproxy' value guarantees curl won't bypass the proxy because of `NO_PROXY` and `no_proxy`environment variables.
+curl http://example.com \
+    --noproxy "" \
+    --proxy http://127.0.0.1:28741  \
+    -H "Connection: keep-alive" \
+    -H "Proxy-Connection: keep-alive" \
+    -v
+```
+
+🔳 **Output:**
+
+```bash
+*   Trying 127.0.0.1:28741...
+* Established connection to 127.0.0.1 (127.0.0.1 port 28741) from 127.0.0.1 port 52780
+* using HTTP/1.x
+> GET http://example.com/ HTTP/1.1
+> Host: example.com
+> User-Agent: curl/8.21.0
+> Accept: */*
+> Proxy-Connection: keep-alive
+> Connection: keep-alive
+>
+* Request completely sent off
+< HTTP/1.1 502 Bad Gateway
+< Content-Type: text/plain; charset=utf-8
+< Content-Length: 37
+< Connection: close
+<
+Could not connect to example.com:80.
+* shutting down connection #0
+```
+
+The above output demonstrates two important features. One, the part that says `Could not connect to example.com:80` means that the entry provided early was used, in this case, to block traffic to `example.com`. And two, the part of the response that says `Connection: close` is a feature specific for HTTP traffic that removes headers like `Proxy-Connection: keep-alive` and `Connection: keep-alive` after being provided in the request to prevent connection reuse and ensure requests reach their intended destinations.
 
 ## Mapping file syntax
 
@@ -135,6 +178,12 @@ ProxiedHosts supports running at system login to maintain connectivity for appli
 
 > [!TIP]
 > Move the proxiedhosts-tray application to a permanent location before enabling startup at login. Likewise, before removing the application or changing its location, ensure to disable the startup first.
+
+## Limitations
+Below is a list of intentional limitations that may or may not be needed in most or all cases.
+
+* HTTP/1.1 pipelining is not supported because it is not worth the effort to identify individual HTTP request boundaries, including request bodies. It's also obsolete, and not used anymore by modern browsers.
+* HTTP protocol upgrades are not supported, so unencrypted WebSocket (`ws://`) upgrades won't work, but encrypted WebSocket (`wss://`) connections will work through CONNECT tunneling.
 
 ## Disclaimer
 ProxiedHosts is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
