@@ -168,7 +168,7 @@ public sealed class ProxyConnectionHandler
             await upstreamStream.WriteAsync(rewrittenHeader, cancellationToken);
         }
 
-        await RelayBidirectionalAsync(client, upstream, clientStream, upstreamStream, cancellationToken);
+        await RelayBidirectionalAsync(client, upstream, clientStream, upstreamStream, !request.IsConnect, cancellationToken);
     }
 
     private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, CancellationToken cancellationToken)
@@ -202,13 +202,13 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private static async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream, CancellationToken cancellationToken)
+    private static async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream, bool rewriteResponse, CancellationToken cancellationToken)
     {
         using var idleCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         idleCancellation.CancelAfter(IdleTimeout);
 
         var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, idleCancellation);
-        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, idleCancellation);
+        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, idleCancellation, rewriteResponse);
         var firstCompleted = await Task.WhenAny(clientToUpstream, upstreamToClient);
 
         if (!firstCompleted.IsCompletedSuccessfully)
@@ -227,10 +227,17 @@ public sealed class ProxyConnectionHandler
             // Connection was idle for too long.
         }
     }
-    
-    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationTokenSource idleCancellation)
+
+    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationTokenSource idleCancellation, bool rewriteResponse = false)
     {
-        await PumpAsync(source, destination, idleCancellation);
+        if (rewriteResponse)
+        {
+            await ForwardHttpResponseAsync(source, destination, idleCancellation);
+        }
+        else
+        {
+            await PumpAsync(source, destination, idleCancellation);
+        }
 
         try
         {
@@ -241,6 +248,82 @@ public sealed class ProxyConnectionHandler
         {
             // The destination may already be closed.
         }
+    }
+    
+    private static async Task ForwardHttpResponseAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation)
+    {
+        var buffered = Array.Empty<byte>();
+        var buffer = new byte[4096];
+        var cancellationToken = idleCancellation.Token;
+
+        while (true)
+        {
+            var headerEnd = buffered.AsSpan().IndexOf("\r\n\r\n"u8);
+
+            if (headerEnd >= 0)
+            {
+                var headerLength = headerEnd + 4;
+
+                if (IsInterimResponse(buffered.AsSpan(0, headerLength)))
+                {
+                    // Forward 1xx responses unchanged and wait for the final response.
+                    await destination.WriteAsync(buffered.AsMemory(0, headerLength), cancellationToken);
+                    idleCancellation.CancelAfter(IdleTimeout);
+                    buffered = buffered[headerLength..];
+                    continue;
+                }
+
+                var rewritten = HttpHeaderRewriter.RewriteResponse(buffered);
+
+                await destination.WriteAsync(rewritten, cancellationToken);
+                idleCancellation.CancelAfter(IdleTimeout);
+
+                // Forward the rest of the response body without modification.
+                await PumpAsync(source, destination, idleCancellation);
+                
+                return;
+            }
+
+            if (buffered.Length >= MaxHeaderBytes)
+            {
+                throw new IOException($"HTTP response header exceeded the {MaxHeaderBytes}-byte limit.");
+            }
+
+            var read = await source.ReadAsync(buffer, cancellationToken);
+
+            if (read == 0)
+            {
+                if (buffered.Length > 0)
+                {
+                    throw new IOException("Connection closed before the HTTP response headers were complete.");
+                }
+
+                return;
+            }
+
+            var combined = new byte[buffered.Length + read];
+
+            buffered.CopyTo(combined, 0);
+            buffer.AsSpan(0, read).CopyTo(combined.AsSpan(buffered.Length));
+
+            buffered = combined;
+            idleCancellation.CancelAfter(IdleTimeout);
+        }
+    }
+
+    private static bool IsInterimResponse(ReadOnlySpan<byte> response)
+    {
+        var lineEnd = response.IndexOf("\r\n"u8);
+
+        if (lineEnd < 0)
+        {
+            return false;
+        }
+
+        var statusLine = Encoding.ASCII.GetString(response[..lineEnd]);
+        var parts = statusLine.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length >= 2 && int.TryParse(parts[1], out var statusCode) && statusCode is >= 100 and < 200 and not 101;
     }
 
     private static async Task PumpAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation)

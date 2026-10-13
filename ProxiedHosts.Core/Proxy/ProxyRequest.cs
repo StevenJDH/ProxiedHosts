@@ -153,32 +153,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
 
     public static byte[] RewriteForOriginServer(byte[] rawHeader, ProxyRequest request)
     {
-        if (request.AbsoluteUri is null || !Uri.TryCreate(request.AbsoluteUri, UriKind.Absolute, out var uri))
-        {
-            return rawHeader;
-        }
-
-        var headerText = Encoding.Latin1.GetString(rawHeader);
-        var split = headerText.IndexOf("\r\n", StringComparison.Ordinal);
-
-        if (split < 0)
-        {
-            return rawHeader;
-        }
-
-        var requestLine = headerText[..split];
-        var parts = requestLine.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
-
-        if (parts.Length != 3)
-        {
-            return rawHeader;
-        }
-
-        var pathAndQuery = string.IsNullOrEmpty(uri.PathAndQuery) ? "/" : uri.PathAndQuery;
-        var newRequestLine = $"{parts[0]} {pathAndQuery} {parts[2]}";
-        var rewritten = newRequestLine + headerText[split..];
-
-        return Encoding.Latin1.GetBytes(rewritten);
+        return HttpHeaderRewriter.RewriteRequest(rawHeader, request);
     }
 
     private static bool TryParseHostPort(string value, int defaultPort, out string host, out int port)
