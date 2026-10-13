@@ -16,8 +16,6 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System.Reflection;
-using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -30,16 +28,18 @@ using ProxiedHosts.Tray.Dialogs;
 using ProxiedHosts.Tray.Infrastructure;
 using ProxiedHosts.Tray.Logging;
 using ProxiedHosts.Tray.Proxy;
+using System.Reflection;
+using System.Text.Json;
 
 namespace ProxiedHosts.Tray;
 
 public sealed class App : Application
 {
+    private readonly FileProxyLogger _logger = new ();
     private TraySettings _settings = new();
 
     private IClassicDesktopStyleApplicationLifetime? _desktop;
     private TrayProxyController? _controller;
-    private FileProxyLogger? _logger;
 
     private TrayIcon? _trayIcon;
     private NativeMenuItem? _statusItem;
@@ -65,7 +65,6 @@ public sealed class App : Application
         {
             _desktop = desktop;
             _desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _logger = new FileProxyLogger();
 
             try
             {
@@ -124,7 +123,7 @@ public sealed class App : Application
             }
             catch (Exception ex)
             {
-                _logger?.Error($"Failed to change mappings state: {ex.Message}");
+                _logger.Error($"Failed to change mappings state: {ex.Message}");
             }
             finally
             {
@@ -146,7 +145,7 @@ public sealed class App : Application
             }
             catch (Exception ex)
             {
-                _logger?.Error($"Failed to update login startup: {ex.Message}");
+                _logger.Error($"Failed to update login startup: {ex.Message}");
             }
             finally
             {
@@ -156,7 +155,7 @@ public sealed class App : Application
                 }
                 catch (Exception ex)
                 {
-                    _logger?.Error($"Failed to read login startup status: {ex.Message}");
+                    _logger.Error($"Failed to read login startup status: {ex.Message}");
                     _startupItem.IsChecked = false;
                 }
             }
@@ -197,7 +196,7 @@ public sealed class App : Application
             }
             catch (Exception ex)
             {
-                _logger?.Error($"Failed to open donation page: {ex.Message}");
+                _logger.Error($"Failed to open donation page: {ex.Message}");
             }
         };
 
@@ -222,7 +221,7 @@ public sealed class App : Application
             }
             catch (Exception ex)
             {
-                _logger?.Error($"Failed to save update preferences: {ex.Message}");
+                _logger.Error($"Failed to save update preferences: {ex.Message}");
             }
             finally
             {
@@ -316,7 +315,7 @@ public sealed class App : Application
         }
         catch (Exception ex)
         {
-            _logger?.Error($"Failed to start proxy: {ex}");
+            _logger.Error($"Failed to start proxy: {ex}");
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -352,13 +351,15 @@ public sealed class App : Application
             return;
         }
 
+        int mappingCount = _controller.MappingCount;
+
         _statusItem!.Header = _controller.IsActive ? "Status: Active" : "Status: Inactive";
         _proxyItem!.Header = $"Proxy: {_controller.ProxyAddress}";
-        _mappingsItem!.Header = $"Enable mappings ({_controller.MappingCount})";
+        _mappingsItem!.Header = $"Enable mappings ({mappingCount})";
         _mappingsItem.IsChecked = _controller.IsActive;
         _mappingsItem.IsEnabled = true;
         _openHostsItem!.IsEnabled = true;
-        _trayIcon!.ToolTipText = _controller.IsActive ? $"ProxiedHosts - Active ({_controller.MappingCount} mappings)" : "ProxiedHosts - Inactive";
+        _trayIcon!.ToolTipText = _controller.IsActive ? $"ProxiedHosts - Active ({mappingCount} mapping{(mappingCount > 1 ? "s" : "")})" : "ProxiedHosts - Inactive";
     }
 
     private async Task CheckForUpdatesAsync(bool automatic = false)
@@ -460,7 +461,7 @@ public sealed class App : Application
         }
         catch (Exception ex)
         {
-            _logger?.Warning($"Failed to save update notification state: {ex.Message}");
+            _logger.Warning($"Failed to save update notification state: {ex.Message}");
         }
     }
     
@@ -472,7 +473,7 @@ public sealed class App : Application
         }
         catch (Exception ex)
         {
-            _logger?.Error($"Failed to open release page: {ex.Message}");
+            _logger.Error($"Failed to open release page: {ex.Message}");
 
             ShowUpdateDialog($"Unable to open the GitHub release page.\n\n{ex.Message}");
         }
@@ -485,12 +486,12 @@ public sealed class App : Application
         switch (ex)
         {
             case TaskCanceledException:
-                _logger?.Warning($"Update check timed out: {ex.Message}");
+                _logger.Warning($"Update check timed out: {ex.Message}");
                 message = "The update check timed out.\n\nCheck the internet connection and try again.";
                 break;
 
             case HttpRequestException httpEx:
-                _logger?.Warning($"Update check failed: {httpEx.Message}");
+                _logger.Warning($"Update check failed: {httpEx.Message}");
 
                 message = httpEx.StatusCode is { } status
                     ? $"GitHub returned HTTP {(int)status} ({status}).\n\nThe update check could not be completed. Please try again later."
@@ -498,12 +499,12 @@ public sealed class App : Application
                 break;
 
             case JsonException:
-                _logger?.Warning($"Invalid GitHub response: {ex.Message}");
+                _logger.Warning($"Invalid GitHub response: {ex.Message}");
                 message = "GitHub returned an invalid response.\n\nPlease try again later.";
                 break;
 
             default:
-                _logger?.Error($"Update check failed: {ex.Message}");
+                _logger.Error($"Update check failed: {ex.Message}");
                 message = $"An unexpected error occurred while checking for updates.\n\n{ex.Message}";
                 break;
         }
@@ -548,24 +549,19 @@ public sealed class App : Application
         }
         catch (Exception ex)
         {
-            _logger?.Error($"Failed to open hosts file: {ex.Message}");
+            _logger.Error($"Failed to open hosts file: {ex.Message}");
         }
     }
 
     private void OpenLogFile()
     {
-        if (_logger is null)
-        {
-            return;
-        }
-
         try
         {
             FileLauncher.Open(_logger.FilePath);
         }
-        catch
+        catch (Exception ex)
         {
-            // Nothing else is available to log to.
+            _logger.Error($"Failed to open log file: {ex.Message}");
         }
     }
 
@@ -577,7 +573,7 @@ public sealed class App : Application
             return;
         }
 
-        var dialog = new AboutDialog(message => _logger?.Error(message));
+        var dialog = new AboutDialog(message => _logger.Error(message));
 
         dialog.Closed += (_, _) =>
         {
@@ -608,7 +604,7 @@ public sealed class App : Application
         }
         catch (Exception ex)
         {
-            _logger?.Error($"Failed to stop proxy during shutdown: {ex}");
+            _logger.Error($"Failed to stop proxy during shutdown: {ex}");
         }
         finally
         {
