@@ -60,7 +60,8 @@ public sealed class ProxyServer
                 }
             });
 
-            await AcceptClientsAsync(cancellationToken, clientShutdown.Token, activeClients);
+            // ReSharper disable once PossiblyMistakenUseOfCancellationToken
+            await AcceptClientsAsync(activeClients, clientShutdown, cancellationToken);
         }
         finally
         {
@@ -71,7 +72,7 @@ public sealed class ProxyServer
         }
     }
 
-    private async Task AcceptClientsAsync(CancellationToken cancellationToken, CancellationToken clientCancellationToken, ConcurrentDictionary<TcpClient, Task> activeClients)
+    private async Task AcceptClientsAsync(ConcurrentDictionary<TcpClient, Task> activeClients, CancellationTokenSource clientShutdown, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -96,7 +97,7 @@ public sealed class ProxyServer
             }
 
             // Client connections have their own cancellation lifetime.
-            var task = _connectionHandler.HandleClientSafelyAsync(client, clientCancellationToken);
+            var task = _connectionHandler.HandleClientSafelyAsync(client, clientShutdown.Token);
 
             activeClients[client] = task;
 
