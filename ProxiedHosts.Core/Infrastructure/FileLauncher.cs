@@ -22,11 +22,48 @@ namespace ProxiedHosts.Core.Infrastructure;
 
 public static class FileLauncher
 {
+    private static readonly TimeSpan LaunchCooldown = TimeSpan.FromSeconds(2);
+    private static readonly Lock LaunchGate = new();
+    private static readonly Dictionary<string, long> LastLaunches = new(StringComparer.Ordinal);
+
     public static void Open(string path)
+    {
+        LaunchWithCooldown($"file:{Path.GetFullPath(path)}", () => OpenFile(path));
+    }
+    
+    public static void OpenUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new ArgumentException("A valid HTTPS URL is required.", nameof(url));
+        }
+
+        LaunchWithCooldown($"url:{uri.AbsoluteUri}", () => OpenUrlCore(uri));
+    }
+
+    private static void LaunchWithCooldown(string key, Action launch)
+    {
+        lock (LaunchGate)
+        {
+            // Using monotonic timer so not affected by system clock.
+            var now = Stopwatch.GetTimestamp();
+
+            if (LastLaunches.TryGetValue(key, out var lastLaunchedAt) && Stopwatch.GetElapsedTime(lastLaunchedAt, now) < LaunchCooldown)
+            {
+                return;
+            }
+
+            // Record only successful launches, allowing immediate retries on failure.
+            launch();
+            LastLaunches[key] = Stopwatch.GetTimestamp();
+        }
+    }
+
+    private static void OpenFile(string path)
     {
         if (OperatingSystem.IsWindows())
         {
-            Process.Start(new ProcessStartInfo
+            using var process = Process.Start(new ProcessStartInfo
             {
                 FileName = path,
                 UseShellExecute = true
@@ -43,16 +80,11 @@ public static class FileLauncher
 
         startInfo.ArgumentList.Add(path);
 
-        Process.Start(startInfo);
+        using var launchedProcess = Process.Start(startInfo);
     }
 
-    public static void OpenUrl(string url)
+    private static void OpenUrlCore(Uri uri)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            throw new ArgumentException("A valid HTTPS URL is required.", nameof(url));
-        }
-
         ProcessStartInfo startInfo;
 
         if (OperatingSystem.IsWindows())
