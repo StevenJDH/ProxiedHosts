@@ -114,14 +114,16 @@ internal sealed class TrayProxyController
         }
     }
 
-
     private async Task MonitorProxyAsync(Task proxyTask, CancellationToken cancellationToken)
     {
-        Exception? failure = null;
-
         try
         {
             await proxyTask;
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.Error("Proxy server stopped unexpectedly.");
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -130,22 +132,12 @@ internal sealed class TrayProxyController
         }
         catch (Exception ex)
         {
-            failure = ex;
-        }
-
-        if (failure is not null)
-        {
-            _logger.Error($"Proxy task failed: {failure}");
+            _logger.Error($"Proxy task failed: {ex}");
         }
 
         if (cancellationToken.IsCancellationRequested)
         {
             return;
-        }
-
-        if (failure is null)
-        {
-            _logger.Error("Proxy server stopped unexpectedly.");
         }
 
         HasFailed = true;
