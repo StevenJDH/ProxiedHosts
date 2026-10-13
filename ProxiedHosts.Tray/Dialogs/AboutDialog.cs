@@ -183,6 +183,9 @@ internal sealed class AboutDialog : Window
                 FontFamily = new FontFamily("monospace"),
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                MaxWidth = 580,
                 Margin = new Thickness(12)
             }
         };
