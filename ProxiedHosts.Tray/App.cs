@@ -101,10 +101,8 @@ public sealed class App : Application
             IsEnabled = false
         };
 
-        _mappingsItem = new NativeMenuItem("Mappings active")
+        _mappingsItem = new NativeMenuItem(ToggleHeader("Mappings active", _settings.MappingsActive))
         {
-            ToggleType = MenuItemToggleType.CheckBox,
-            IsChecked = _settings.MappingsActive,
             IsEnabled = false
         };
 
@@ -126,15 +124,11 @@ public sealed class App : Application
             }
             finally
             {
-                _mappingsItem.IsChecked = _controller.IsActive;
+                _mappingsItem.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", _controller.IsActive);
             }
         };
 
-        _startupItem = new NativeMenuItem("Start at login")
-        {
-            ToggleType = MenuItemToggleType.CheckBox,
-            IsChecked = StartupManager.IsEnabled()
-        };
+        _startupItem = new NativeMenuItem(ToggleHeader("Start at login", StartupManager.IsEnabled()));
 
         _startupItem.Click += (_, _) =>
         {
@@ -150,12 +144,12 @@ public sealed class App : Application
             {
                 try
                 {
-                    _startupItem.IsChecked = StartupManager.IsEnabled();
+                    _startupItem.Header = ToggleHeader("Start at login", StartupManager.IsEnabled());
                 }
                 catch (Exception ex)
                 {
                     _logger.Error($"Failed to read login startup status: {ex.Message}");
-                    _startupItem.IsChecked = false;
+                    _startupItem.Header = ToggleHeader("Start at login", false);
                 }
             }
         };
@@ -203,11 +197,7 @@ public sealed class App : Application
             _ = CheckForUpdatesAsync();
         };
 
-        _previewReleasesItem = new NativeMenuItem("Include preview releases")
-        {
-            ToggleType = MenuItemToggleType.CheckBox,
-            IsChecked = _settings.IncludePreviewReleases
-        };
+        _previewReleasesItem = new NativeMenuItem(ToggleHeader("Include preview releases", _settings.IncludePreviewReleases));
 
         _previewReleasesItem.Click += (_, _) =>
         {
@@ -221,7 +211,7 @@ public sealed class App : Application
             }
             finally
             {
-                _previewReleasesItem.IsChecked = _settings.IncludePreviewReleases;
+                _previewReleasesItem.Header = ToggleHeader("Include preview releases", _settings.IncludePreviewReleases);
             }
         };
 
@@ -339,7 +329,8 @@ public sealed class App : Application
         {
             _statusItem!.Header = "Status: Failed";
             _proxyItem!.Header = "Proxy: Stopped";
-            _mappingsItem!.IsChecked = false;
+            _proxyItem!.IsEnabled = false;
+            _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", false);
             _mappingsItem.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
             _trayIcon!.ToolTipText = "ProxiedHosts - Failed";
@@ -351,12 +342,12 @@ public sealed class App : Application
         string s = mappingCount > 1 ? "s" : "";
 
         _statusItem!.Header = _controller.IsActive ? "Status: Active" : "Status: Inactive";
-        _proxyItem!.Header = $"Proxy: {_controller.ProxyAddress}";
-        _mappingsItem!.Header = $"Enable mappings ({mappingCount})";
-        _mappingsItem.IsChecked = _controller.IsActive;
+        _proxyItem!.Header = $"Proxy: {_controller.ProxyAddress} (Settings...)";
+        _proxyItem!.IsEnabled = true;
+        _mappingsItem!.Header = ToggleHeader($"Enable mappings ({mappingCount})", _controller.IsActive);
         _mappingsItem.IsEnabled = true;
         _openHostsItem!.IsEnabled = true;
-        _trayIcon!.ToolTipText = _controller.IsActive ? $"ProxiedHosts - Active ({mappingCount} mapping{s}" : "ProxiedHosts - Inactive";
+        _trayIcon!.ToolTipText = _controller.IsActive ? $"ProxiedHosts - Active ({mappingCount} mapping{s})" : "ProxiedHosts - Inactive";
     }
 
     private async Task CheckForUpdatesAsync(bool automatic = false)
@@ -618,5 +609,10 @@ public sealed class App : Application
                 _desktop?.Shutdown();
             }
         }
+    }
+
+    private static string ToggleHeader(string title, bool isChecked)
+    {
+        return $"{(isChecked ? '☑' : '☐')} {title}";
     }
 }
