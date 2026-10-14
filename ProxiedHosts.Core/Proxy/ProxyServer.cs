@@ -16,6 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using ProxiedHosts.Core.Configuration;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
@@ -24,8 +25,6 @@ namespace ProxiedHosts.Core.Proxy;
 
 public sealed class ProxyServer
 {
-    private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(10);
-
     private readonly TcpListener _listener;
     private readonly ProxyConnectionHandler _connectionHandler;
 
@@ -126,7 +125,7 @@ public sealed class ProxyServer
 
         try
         {
-            await allClients.WaitAsync(DrainTimeout, CancellationToken.None);
+            await allClients.WaitAsync(ProxyConfiguration.Instance.DrainTimeout, CancellationToken.None);
         }
         catch (TimeoutException) when (!allClients.IsCompleted)
         {

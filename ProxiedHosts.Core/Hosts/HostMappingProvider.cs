@@ -16,6 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using ProxiedHosts.Core.Configuration;
 using ProxiedHosts.Core.Logging;
 using System.Net;
 using System.Text;
@@ -87,9 +88,9 @@ public sealed class HostMappingProvider : IDisposable
             }
 
             // File editors often generate several events for one save.
-            // Reset the one-shot timer each time so Reload() occurs
-            // 250 ms after the final event to debounce them into a single reload.
-            _reloadTimer.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
+            // Reset the one-shot timer each time so Reload() occurs a couple hundred
+            // milliseconds after the final event to debounce them into a single reload.
+            _reloadTimer.Change(ProxyConfiguration.Instance.MappingReloadDelay, Timeout.InfiniteTimeSpan);
         }
     }
 

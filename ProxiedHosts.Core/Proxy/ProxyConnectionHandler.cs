@@ -16,6 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using ProxiedHosts.Core.Configuration;
 using ProxiedHosts.Core.Hosts;
 using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
@@ -40,11 +41,6 @@ public sealed class ProxyConnectionHandler
         string Host,
         int Port,
         ConnectionRoute Route);
-
-    private const int MaxHeaderBytes = 64 * 1024;
-    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
-    private static readonly TimeSpan HeaderReadTimeout = TimeSpan.FromSeconds(15);
-    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(5);
 
     private readonly HostMappingProvider _hostMappings;
     private readonly ProxyState _proxyState;
@@ -108,8 +104,8 @@ public sealed class ProxyConnectionHandler
         {
             using var headerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-            headerCancellation.CancelAfter(HeaderReadTimeout);
-            requestHeader = await HttpHeaderReader.ReadAsync(clientStream, MaxHeaderBytes, headerCancellation.Token);
+            headerCancellation.CancelAfter(ProxyConfiguration.Instance.HeaderReadTimeout);
+            requestHeader = await HttpHeaderReader.ReadAsync(clientStream, ProxyConfiguration.Instance.MaxHeaderBytes, headerCancellation.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -175,7 +171,7 @@ public sealed class ProxyConnectionHandler
     private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, CancellationToken cancellationToken)
     {
         using var connectCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        connectCancellation.CancelAfter(ConnectTimeout);
+        connectCancellation.CancelAfter(ProxyConfiguration.Instance.ConnectTimeout);
 
         try
         {
@@ -206,7 +202,7 @@ public sealed class ProxyConnectionHandler
     private static async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream, bool rewriteResponse, CancellationToken cancellationToken)
     {
         using var idleCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        idleCancellation.CancelAfter(IdleTimeout);
+        idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
 
         var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, idleCancellation);
         var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, idleCancellation, rewriteResponse);
@@ -269,7 +265,7 @@ public sealed class ProxyConnectionHandler
                 {
                     // Forward 1xx responses unchanged and wait for the final response.
                     await destination.WriteAsync(buffered.AsMemory(0, headerLength), cancellationToken);
-                    idleCancellation.CancelAfter(IdleTimeout);
+                    idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
                     buffered = buffered[headerLength..];
                     continue;
                 }
@@ -277,7 +273,7 @@ public sealed class ProxyConnectionHandler
                 var rewritten = HttpHeaderRewriter.RewriteResponse(buffered);
 
                 await destination.WriteAsync(rewritten, cancellationToken);
-                idleCancellation.CancelAfter(IdleTimeout);
+                idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
 
                 // Forward the rest of the response body without modification.
                 await PumpAsync(source, destination, idleCancellation);
@@ -285,9 +281,11 @@ public sealed class ProxyConnectionHandler
                 return;
             }
 
-            if (buffered.Length >= MaxHeaderBytes)
+            var maxHeaderBytes = ProxyConfiguration.Instance.MaxHeaderBytes;
+
+            if (buffered.Length >= maxHeaderBytes)
             {
-                throw new IOException($"HTTP response header exceeded the {MaxHeaderBytes}-byte limit.");
+                throw new IOException($"HTTP response header exceeded the {maxHeaderBytes}-byte limit.");
             }
 
             var read = await source.ReadAsync(buffer, cancellationToken);
@@ -308,7 +306,7 @@ public sealed class ProxyConnectionHandler
             buffer.AsSpan(0, read).CopyTo(combined.AsSpan(buffered.Length));
 
             buffered = combined;
-            idleCancellation.CancelAfter(IdleTimeout);
+            idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
         }
     }
 
@@ -346,7 +344,7 @@ public sealed class ProxyConnectionHandler
                 await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
 
                 // Activity in either direction resets the shared timeout.
-                idleCancellation.CancelAfter(IdleTimeout);
+                idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
             }
         }
         finally

@@ -26,6 +26,18 @@ public sealed record ProxyConfiguration(string ApplicationName, IPAddress Listen
 {
     public static ProxyConfiguration Instance { get; } = Load();
 
+    public int MaxHeaderBytes { get; init; } = 64 * 1024;
+
+    public TimeSpan ConnectTimeout { get; init; } = TimeSpan.FromSeconds(15);
+
+    public TimeSpan HeaderReadTimeout { get; init; } = TimeSpan.FromSeconds(15);
+
+    public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromMinutes(5);
+
+    public TimeSpan DrainTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    public TimeSpan MappingReloadDelay { get; init; } = TimeSpan.FromMilliseconds(250);
+
     private static ProxyConfiguration Load()
     {
         var directory = ApplicationPaths.GetDataDirectory();
