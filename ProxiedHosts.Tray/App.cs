@@ -120,53 +120,9 @@ public sealed class App : Application
             IsEnabled = false
         };
 
-        _mappingsItem.Click += (_, _) =>
-        {
-            if (_controller is null)
-            {
-                return;
-            }
-
-            try
-            {
-                _settings.SetMappingsActive(!_controller.IsActive);
-                _controller.ToggleMappings();
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Failed to change mappings state: {ex.Message}");
-            }
-            finally
-            {
-                _mappingsItem.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", _controller.IsActive);
-            }
-        };
-
+        _mappingsItem.Click += (_, _) => ToggleMappings();
         _startupItem = new NativeMenuItem(ToggleHeader("Start at login", StartupManager.IsEnabled()));
-
-        _startupItem.Click += (_, _) =>
-        {
-            try
-            {
-                StartupManager.SetEnabled(!StartupManager.IsEnabled());
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Failed to update login startup: {ex.Message}");
-            }
-            finally
-            {
-                try
-                {
-                    _startupItem.Header = ToggleHeader("Start at login", StartupManager.IsEnabled());
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Failed to read login startup status: {ex.Message}");
-                    _startupItem.Header = ToggleHeader("Start at login", false);
-                }
-            }
-        };
+        _startupItem.Click += (_, _) => ToggleStartup();
 
         _openHostsItem = new NativeMenuItem("Open proxiedhosts.txt")
         {
@@ -306,6 +262,52 @@ public sealed class App : Application
             });
     }
 
+    private void ToggleMappings()
+    {
+        if (_controller is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _settings.SetMappingsActive(!_controller.IsActive);
+            _controller.ToggleMappings();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to change mappings state: {ex.Message}");
+        }
+        finally
+        {
+            _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", _controller.IsActive);
+        }
+    }
+
+    private void ToggleStartup()
+    {
+        try
+        {
+            StartupManager.SetEnabled(!StartupManager.IsEnabled());
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to update login startup: {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
+                _startupItem!.Header = ToggleHeader("Start at login", StartupManager.IsEnabled());
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to read login startup status: {ex.Message}");
+                _startupItem!.Header = ToggleHeader("Start at login", false);
+            }
+        }
+    }
+
     private async Task StartProxyAsync()
     {
         try
@@ -344,7 +346,6 @@ public sealed class App : Application
         {
             _statusItem!.Header = "Status: Failed";
             _proxyItem!.Header = "Proxy: Stopped";
-            _proxyItem!.IsEnabled = false;
             _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", false);
             _mappingsItem.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
