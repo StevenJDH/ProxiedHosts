@@ -47,13 +47,16 @@ internal sealed class TraySettings
     public static TraySettings Load()
     {
         var settings = new TraySettings();
+        var path = SettingsPath;
 
-        if (!File.Exists(SettingsPath))
+        CleanupTemporarySettings(path);
+
+        if (!File.Exists(path))
         {
             return settings;
         }
 
-        using var document = JsonDocument.Parse(File.ReadAllText(SettingsPath));
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
         var root = document.RootElement;
 
         if (root.ValueKind != JsonValueKind.Object)
@@ -75,6 +78,31 @@ internal sealed class TraySettings
         settings.LastNotifiedPreviewVersion = ReadVersion(root, "lastNotifiedPreviewVersion");
 
         return settings;
+    }
+
+    private static void CleanupTemporarySettings(string settingsPath)
+    {
+        var directory = Path.GetDirectoryName(settingsPath)!;
+        var pattern = $"{Path.GetFileName(settingsPath)}.*.tmp";
+
+        try
+        {
+            foreach (var temporaryPath in Directory.EnumerateFiles(directory, pattern))
+            {
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Cleanup is best-effort. Continue with the remaining files.
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Temporary-file cleanup must not prevent settings from loading.
+        }
     }
 
     public bool WasNotified(Version version, bool isPreview)
@@ -152,27 +180,56 @@ internal sealed class TraySettings
         return null;
     }
 
+    /// <summary>
+    /// Atomically saves tray settings by writing to a temporary file before
+    /// replacing the existing file, preventing corruption from interrupted writes.
+    /// </summary>
     private void Save()
     {
         var path = SettingsPath;
+        var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
 
-        using var stream = File.Create(path);
-        using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-        writer.WriteStartObject();
-        writer.WriteBoolean("includePreviewReleases", IncludePreviewReleases);
-        writer.WriteBoolean("mappingsActive", MappingsActive);
-
-        if (LastNotifiedStableVersion is not null)
+        try
         {
-            writer.WriteString("lastNotifiedStableVersion", LastNotifiedStableVersion.ToString());
-        }
+            // Write the complete settings file before replacing the original. Keep scoped using for this.
+            using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions {Indented = true});
 
-        if (LastNotifiedPreviewVersion is not null)
+                writer.WriteStartObject();
+                writer.WriteBoolean("includePreviewReleases", IncludePreviewReleases);
+                writer.WriteBoolean("mappingsActive", MappingsActive);
+
+                if (LastNotifiedStableVersion is not null)
+                {
+                    writer.WriteString("lastNotifiedStableVersion", LastNotifiedStableVersion.ToString());
+                }
+
+                if (LastNotifiedPreviewVersion is not null)
+                {
+                    writer.WriteString("lastNotifiedPreviewVersion", LastNotifiedPreviewVersion.ToString());
+                }
+
+                writer.WriteEndObject();
+                writer.Flush();
+
+                // Request that buffered file data be flushed to storage.
+                stream.Flush(flushToDisk: true);
+            }
+
+            // Replace the original only after the new file is complete.
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
         {
-            writer.WriteString("lastNotifiedPreviewVersion", LastNotifiedPreviewVersion.ToString());
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch
+            {
+                // Cleanup is best-effort. Preserves any original save exceptions.
+            }
         }
-
-        writer.WriteEndObject();
     }
 }
