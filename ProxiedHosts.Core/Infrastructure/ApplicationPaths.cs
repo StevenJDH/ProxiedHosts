@@ -1,5 +1,4 @@
-﻿
-/*
+﻿/*
  * This file is part of ProxiedHosts <https://github.com/StevenJDH/ProxiedHosts>.
  * Copyright (C) 2026 Steven Jenkins De Haro.
  *
@@ -21,7 +20,7 @@ namespace ProxiedHosts.Core.Infrastructure;
 
 internal static class ApplicationPaths
 {
-    public const string ApplicationName = "ProxiedHosts";
+    public const string DataDirectoryName = "ProxiedHosts";
 
     public static string GetDataDirectory()
     {
@@ -32,7 +31,7 @@ internal static class ApplicationPaths
             throw new InvalidOperationException("Could not determine the application data directory.");
         }
 
-        var directory = Path.Combine(root, ApplicationName);
+        var directory = Path.Combine(root, DataDirectoryName);
 
         Directory.CreateDirectory(directory);
 

@@ -30,7 +30,7 @@ public sealed record ProxyConfiguration(string ApplicationName, IPAddress Listen
     {
         var directory = ApplicationPaths.GetDataDirectory();
 
-        return new ProxyConfiguration(ApplicationName: ApplicationPaths.ApplicationName,
+        return new ProxyConfiguration(ApplicationName: ApplicationMetadata.Instance.Product,
                                       ListenAddress: IPAddress.Loopback,
                                       HostsFilePath: Path.Combine(directory, "proxiedhosts.txt"),
                                       PortFilePath: Path.Combine(directory, "proxy.port"),

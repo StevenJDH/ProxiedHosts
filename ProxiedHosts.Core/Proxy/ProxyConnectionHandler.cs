@@ -16,8 +16,8 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using ProxiedHosts.Core.Configuration;
 using ProxiedHosts.Core.Hosts;
+using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -357,7 +357,7 @@ public sealed class ProxyConnectionHandler
 
     private static async Task WriteErrorAsync(Stream stream, int statusCode, string reason, string message, CancellationToken cancellationToken)
     {
-        var appName = WebUtility.HtmlEncode(ProxyConfiguration.Instance.ApplicationName);
+        var appName = WebUtility.HtmlEncode(ApplicationMetadata.Instance.Product);
         var safeReason = WebUtility.HtmlEncode(reason);
         var safeMessage = WebUtility.HtmlEncode(message);
 

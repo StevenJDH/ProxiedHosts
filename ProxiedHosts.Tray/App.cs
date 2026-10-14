@@ -28,7 +28,6 @@ using ProxiedHosts.Tray.Dialogs;
 using ProxiedHosts.Tray.Infrastructure;
 using ProxiedHosts.Tray.Logging;
 using ProxiedHosts.Tray.Proxy;
-using System.Reflection;
 using System.Text.Json;
 
 namespace ProxiedHosts.Tray;
@@ -178,10 +177,7 @@ public sealed class App : Application
             OpenLogFile();
         };
 
-        var donationUrl = typeof(App).Assembly
-            .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute => attribute.Key == "FixedDonationUrl")?
-            .Value ?? string.Empty;
+        var donationUrl = ApplicationMetadata.Instance.FixedDonationUrl;
 
         var donateItem = new NativeMenuItem("Donate 5€ (PayPal)...")
         {
@@ -385,13 +381,15 @@ public sealed class App : Application
 
         try
         {
-            var assembly = typeof(Program).Assembly;
-            var currentVersion = assembly.GetName().Version ?? throw new InvalidOperationException("Could not determine the installed version.");
-            var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>();
+            var metadata = ApplicationMetadata.Instance;
+            var currentVersion = metadata.Version;
+            var repositoryUrl = metadata.RepositoryUrl;
 
-            var repositoryUrl = metadata
-                .FirstOrDefault(attribute => attribute.Key == "RepositoryUrl")?
-                .Value ?? throw new InvalidOperationException("Could not determine the repository URL.");
+            if (string.IsNullOrWhiteSpace(repositoryUrl))
+            {
+                throw new InvalidOperationException(
+                    "Could not determine the repository URL.");
+            }
 
             var update = await UpdateChecker.CheckAsync(currentVersion, repositoryUrl, _settings.IncludePreviewReleases);
 

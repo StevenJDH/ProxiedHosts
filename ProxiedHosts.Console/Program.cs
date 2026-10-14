@@ -21,7 +21,6 @@ using ProxiedHosts.Core.Hosts;
 using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
 using ProxiedHosts.Core.Proxy;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using ProxiedHosts.Console.Infrastructure;
@@ -52,7 +51,7 @@ internal static class Program
             }
 
             var configuration = ProxyConfiguration.Instance;
-            var currentVersion = typeof(Program).Assembly.GetName().Version ?? throw new InvalidOperationException("Could not determine the installed version.");
+            var currentVersion = ApplicationMetadata.Instance.Version;
             using var hostMappings = new HostMappingProvider(configuration.HostsFilePath, logger);
             var portProvider = new PortProvider();
             var port = await portProvider.GetOrCreateAvailablePortAsync(shutdown.Token);
@@ -165,12 +164,7 @@ internal static class Program
                 case ConsoleKey.D:
                     try
                     {
-                        var donationUrl = typeof(Program).Assembly
-                            .GetCustomAttributes<AssemblyMetadataAttribute>()
-                            .FirstOrDefault(attribute => attribute.Key == "FixedDonationUrl")?
-                            .Value ?? string.Empty;
-
-                        FileLauncher.OpenUrl(donationUrl);
+                        FileLauncher.OpenUrl(ApplicationMetadata.Instance.FixedDonationUrl);
                     }
                     catch (Exception ex)
                     {
@@ -207,10 +201,12 @@ internal static class Program
                 logger.Information("Checking for updates...");
             }
 
-            var repositoryUrl = typeof(Program).Assembly
-                .GetCustomAttributes<AssemblyMetadataAttribute>()
-                .FirstOrDefault(attribute => attribute.Key == "RepositoryUrl")?
-                .Value ?? throw new InvalidOperationException("Could not determine the repository URL.");
+            var repositoryUrl = ApplicationMetadata.Instance.RepositoryUrl;
+
+            if (string.IsNullOrWhiteSpace(repositoryUrl))
+            {
+                throw new InvalidOperationException("Could not determine the repository URL.");
+            }
 
             // Console checks stable releases only.
             var update = await UpdateChecker.CheckAsync(currentVersion, repositoryUrl, includePreviewReleases: false, cancellationToken: cancellationToken);
@@ -258,22 +254,14 @@ internal static class Program
         }
     }
 
-
     private static void ShowAboutInformation()
     {
-        var assembly = typeof(Program).Assembly;
-        var product = assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "ProxiedHosts";
-        var version = assembly.GetName().Version?.ToString() ?? "Unknown";
-        var copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? string.Empty;
-        var metadata = assembly.GetCustomAttributes<AssemblyMetadataAttribute>();
-
-        var authors = metadata
-            .FirstOrDefault(attribute => attribute.Key == "Authors")?
-            .Value ?? string.Empty;
-
-        var repositoryUrl = metadata
-            .FirstOrDefault(attribute => attribute.Key == "RepositoryUrl")?
-            .Value ?? string.Empty;
+        var metadata = ApplicationMetadata.Instance;
+        var product = metadata.Product;
+        var version = metadata.Version;
+        var authors = metadata.Authors;
+        var copyright = metadata.Copyright;
+        var repositoryUrl = metadata.RepositoryUrl;
 
         SystemConsole.WriteLine($"""
 

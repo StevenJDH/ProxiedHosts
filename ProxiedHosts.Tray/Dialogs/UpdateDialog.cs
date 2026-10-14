@@ -20,7 +20,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using ProxiedHosts.Core.Configuration;
+using ProxiedHosts.Core.Infrastructure;
 
 namespace ProxiedHosts.Tray.Dialogs;
 
@@ -32,7 +32,7 @@ internal sealed class UpdateDialog : Window
 {
     public UpdateDialog(string message, Action? onYes = null)
     {
-        Title = $"{ProxyConfiguration.Instance.ApplicationName} - Check for updates";
+        Title = $"{ApplicationMetadata.Instance.Product} - Check for updates";
         Width = 440;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;

@@ -36,20 +36,19 @@ namespace ProxiedHosts.Tray.Dialogs;
 /// </summary>
 internal sealed class AboutDialog : Window
 {
-    private readonly Bitmap _logo;
     private readonly Action<string>? _logError;
 
     public AboutDialog(Action<string>? logError = null)
     {
         _logError = logError;
 
-        var assembly = typeof(App).Assembly;
-        var product = assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "ProxiedHosts";
-        var version = assembly.GetName().Version?.ToString() ?? "Unknown";
-        var authors = GetMetadata(assembly, "Authors");
-        var copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? string.Empty;
-        var repositoryUrl = GetMetadata(assembly, "RepositoryUrl");
-        var donationUrl = GetMetadata(assembly, "DonationUrl");
+        var metadata = ApplicationMetadata.Instance;
+        var product = metadata.Product;
+        var version = metadata.Version;
+        var authors = metadata.Authors;
+        var copyright = metadata.Copyright;
+        var repositoryUrl = metadata.RepositoryUrl;
+        var donationUrl = metadata.DonationUrl;
 
         Title = $"About {product}";
         Width = 700;
@@ -59,17 +58,15 @@ internal sealed class AboutDialog : Window
         ShowInTaskbar = true;
         ShowActivated = true;
 
-        using (var stream = AssetLoader.Open(new Uri("avares://proxiedhosts-tray/Assets/ProxiedHosts.ico")))
+        using (var iconStream = AssetLoader.Open(new Uri("avares://proxiedhosts-tray/Assets/ProxiedHosts.ico")))
         {
-            Icon = new WindowIcon(stream);
+            Icon = new WindowIcon(iconStream);
         }
 
-        using (var stream = AssetLoader.Open(new Uri("avares://proxiedhosts-tray/Assets/ProxiedHostsAbout.png")))
-        {
-            _logo = new Bitmap(stream);
-        }
-
-        Closed += (_, _) => _logo.Dispose();
+        using var aboutPngStream = AssetLoader.Open(new Uri("avares://proxiedhosts-tray/Assets/ProxiedHostsAbout.png"));
+        var logo = new Bitmap(aboutPngStream);
+        
+        Closed += (_, _) => logo.Dispose();
 
         // Application icon and version information.
         var header = new StackPanel
@@ -80,7 +77,7 @@ internal sealed class AboutDialog : Window
             {
                 new Image
                 {
-                    Source = _logo,
+                    Source = logo,
                     Width = 80,
                     Height = 80,
                     Stretch = Stretch.Uniform
@@ -179,7 +176,7 @@ internal sealed class AboutDialog : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = new TextBlock
             {
-                Text = ReadLicense(assembly),
+                Text = ReadLicense(typeof(App).Assembly),
                 FontFamily = new FontFamily("monospace"),
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
@@ -348,14 +345,6 @@ internal sealed class AboutDialog : Window
         layout.Children.Add(footer);
 
         Content = layout;
-    }
-
-    private static string GetMetadata(Assembly assembly, string key)
-    {
-        return assembly
-            .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute => attribute.Key == key)?
-            .Value ?? string.Empty;
     }
 
     private static string ReadLicense(Assembly assembly)
