@@ -101,6 +101,20 @@ public sealed class App : Application
             IsEnabled = false
         };
 
+        var openProxySettingsItem = new NativeMenuItem("Open proxy settings...");
+
+        openProxySettingsItem.Click += (_, _) =>
+        {
+            try
+            {
+                FileLauncher.OpenSystemProxySettings();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Failed to open system proxy settings: {ex.Message}");
+            }
+        };
+
         _mappingsItem = new NativeMenuItem(ToggleHeader("Mappings active", _settings.MappingsActive))
         {
             IsEnabled = false
@@ -250,6 +264,7 @@ public sealed class App : Application
         {
             _statusItem,
             _proxyItem,
+            openProxySettingsItem,
 
             new NativeMenuItemSeparator(),
 
@@ -342,8 +357,7 @@ public sealed class App : Application
         string s = mappingCount > 1 ? "s" : "";
 
         _statusItem!.Header = _controller.IsActive ? "Status: Active" : "Status: Inactive";
-        _proxyItem!.Header = $"Proxy: {_controller.ProxyAddress} (Settings...)";
-        _proxyItem!.IsEnabled = true;
+        _proxyItem!.Header = $"Proxy: {_controller.ProxyAddress}";
         _mappingsItem!.Header = ToggleHeader($"Enable mappings ({mappingCount})", _controller.IsActive);
         _mappingsItem.IsEnabled = true;
         _openHostsItem!.IsEnabled = true;
