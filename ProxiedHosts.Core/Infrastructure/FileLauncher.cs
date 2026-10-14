@@ -129,7 +129,7 @@ public static class FileLauncher
         }
         else if (OperatingSystem.IsMacOS())
         {
-            startInfo = new ProcessStartInfo("open")
+            startInfo = new ProcessStartInfo("/usr/bin/open")
             {
                 UseShellExecute = false
             };
@@ -146,7 +146,7 @@ public static class FileLauncher
 
             if (desktop.Contains("KDE", StringComparison.OrdinalIgnoreCase))
             {
-                startInfo = new ProcessStartInfo("systemsettings")
+                startInfo = new ProcessStartInfo("/usr/bin/systemsettings")
                 {
                     UseShellExecute = false
                 };
@@ -155,7 +155,7 @@ public static class FileLauncher
             }
             else if (desktop.Contains("GNOME", StringComparison.OrdinalIgnoreCase))
             {
-                startInfo = new ProcessStartInfo("gnome-control-center")
+                startInfo = new ProcessStartInfo("/usr/bin/gnome-control-center")
                 {
                     UseShellExecute = false
                 };
