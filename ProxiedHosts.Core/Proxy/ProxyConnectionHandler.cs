@@ -165,7 +165,7 @@ public sealed class ProxyConnectionHandler
             await upstreamStream.WriteAsync(rewrittenHeader, cancellationToken);
         }
 
-        await RelayBidirectionalAsync(client, upstream, clientStream, upstreamStream, !request.IsConnect, cancellationToken);
+        await RelayBidirectionalAsync(client, upstream, clientStream, upstreamStream, request.IsConnect, cancellationToken);
     }
 
     private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, CancellationToken cancellationToken)
@@ -199,13 +199,16 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private static async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream, bool rewriteResponse, CancellationToken cancellationToken)
+    private static async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream,
+        bool isConnect, CancellationToken cancellationToken)
     {
+        var idleTimeout = isConnect ? ProxyConfiguration.Instance.TunnelIdleTimeout : ProxyConfiguration.Instance.IdleTimeout;
         using var idleCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
+        
+        idleCancellation.CancelAfter(idleTimeout);
 
-        var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, idleCancellation);
-        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, idleCancellation, rewriteResponse);
+        var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, idleCancellation, idleTimeout);
+        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, idleCancellation, idleTimeout, !isConnect);
         var firstCompleted = await Task.WhenAny(clientToUpstream, upstreamToClient);
 
         if (!firstCompleted.IsCompletedSuccessfully)
@@ -225,15 +228,16 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationTokenSource idleCancellation, bool rewriteResponse = false)
+    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationTokenSource idleCancellation,
+        TimeSpan idleTimeout, bool rewriteResponse = false)
     {
         if (rewriteResponse)
         {
-            await ForwardHttpResponseAsync(source, destination, idleCancellation);
+            await ForwardHttpResponseAsync(source, destination, idleCancellation, idleTimeout);
         }
         else
         {
-            await PumpAsync(source, destination, idleCancellation);
+            await PumpAsync(source, destination, idleCancellation, idleTimeout);
         }
 
         try
@@ -247,7 +251,7 @@ public sealed class ProxyConnectionHandler
         }
     }
     
-    private static async Task ForwardHttpResponseAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation)
+    private static async Task ForwardHttpResponseAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation, TimeSpan idleTimeout)
     {
         var buffered = Array.Empty<byte>();
         var buffer = new byte[4096];
@@ -265,7 +269,7 @@ public sealed class ProxyConnectionHandler
                 {
                     // Forward 1xx responses unchanged and wait for the final response.
                     await destination.WriteAsync(buffered.AsMemory(0, headerLength), cancellationToken);
-                    idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
+                    idleCancellation.CancelAfter(idleTimeout);
                     buffered = buffered[headerLength..];
                     continue;
                 }
@@ -273,10 +277,10 @@ public sealed class ProxyConnectionHandler
                 var rewritten = HttpHeaderRewriter.RewriteResponse(buffered);
 
                 await destination.WriteAsync(rewritten, cancellationToken);
-                idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
+                idleCancellation.CancelAfter(idleTimeout);
 
                 // Forward the rest of the response body without modification.
-                await PumpAsync(source, destination, idleCancellation);
+                await PumpAsync(source, destination, idleCancellation, idleTimeout);
                 
                 return;
             }
@@ -306,7 +310,7 @@ public sealed class ProxyConnectionHandler
             buffer.AsSpan(0, read).CopyTo(combined.AsSpan(buffered.Length));
 
             buffered = combined;
-            idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
+            idleCancellation.CancelAfter(idleTimeout);
         }
     }
 
@@ -325,7 +329,7 @@ public sealed class ProxyConnectionHandler
         return parts.Length >= 2 && int.TryParse(parts[1], out var statusCode) && statusCode is >= 100 and < 200 and not 101;
     }
 
-    private static async Task PumpAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation)
+    private static async Task PumpAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation, TimeSpan idleTimeout)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(32 * 1024);
         var cancellationToken = idleCancellation.Token;
@@ -344,7 +348,7 @@ public sealed class ProxyConnectionHandler
                 await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
 
                 // Activity in either direction resets the shared timeout.
-                idleCancellation.CancelAfter(ProxyConfiguration.Instance.IdleTimeout);
+                idleCancellation.CancelAfter(idleTimeout);
             }
         }
         finally
