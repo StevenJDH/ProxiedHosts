@@ -17,6 +17,32 @@
 
 ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hostname-to-IP mappings without modifying the system hosts file. Mappings are loaded from a simple `proxiedhosts.txt` file that can be changed without administrator privileges. HTTP traffic is forwarded using the configured hostname mappings, while HTTPS connections are tunneled using the standard CONNECT method without decrypting TLS traffic. A stable local proxy port is generated and persisted between application launches for predictable client configuration. The proxy is designed primarily for local development, testing, and environments where editing the operating system hosts file is inconvenient or restricted.
 
+<table>
+  <tr>
+    <td align="center">
+      <img src="screenshots/console-windows.png" width="260"
+        title="Console App" alt="Console App"
+      /><br>
+      <b>Console App</b><br>
+      Console proxy manager.
+    </td>
+    <td align="center">
+      <img src="screenshots/tray-windows.png" width="260"
+        title="Tray App" alt="Tray App"
+      /><br>
+      <b>Tray App</b><br>
+      Desktop proxy manager.
+    </td>
+    <td align="center">
+      <img src="screenshots/html-error-message.png" width="260"
+        title="HTML Errors" alt="HTML Errors"
+      /><br>
+      <b>HTML Errors</b><br>
+      HTTP proxy errors.
+    </td>
+  </tr>
+</table>
+
 [![Buy me a coffee](https://img.shields.io/static/v1?label=Buy%20me%20a&message=coffee&color=important&style=flat&logo=buy-me-a-coffee&logoColor=white)](https://www.buymeacoffee.com/stevenjdh)
 
 ## Features
@@ -59,6 +85,7 @@ For `proxiedhosts-tray`, run the executable and right-click the icon in the syst
 ┌──────────────────────────────────────┐
 │ Status: Active                       │
 │ Proxy: http://127.0.0.1:12345        │
+│ Open proxy settings...               │
 ├──────────────────────────────────────┤
 │ ☑ Enable mappings (5)               │
 │ ☑ Start at login                    │
@@ -106,7 +133,7 @@ curl http://example.com \
 
 ```bash
 *   Trying 127.0.0.1:12345...
-* Established connection to 127.0.0.1 (127.0.0.1 port 12345) from 127.0.0.1 port 52780
+* Established connection to 127.0.0.1 (127.0.0.1 port 12345) from 127.0.0.1 port 63840
 * using HTTP/1.x
 > GET http://example.com/ HTTP/1.1
 > Host: example.com
@@ -117,12 +144,28 @@ curl http://example.com \
 >
 * Request completely sent off
 < HTTP/1.1 502 Bad Gateway
-< Content-Type: text/plain; charset=utf-8
-< Content-Length: 37
+< Content-Type: text/html; charset=utf-8
+< Content-Length: 4022
+< Cache-Control: no-store
+< X-Content-Type-Options: nosniff
 < Connection: close
 <
-Could not connect to example.com:80.
-* shutting down connection #0
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>502 Bad Gateway | ProxiedHosts</title>
+...
+</head>
+<body>
+    <main class="card">
+...
+        <p class="message">Could not connect to example.com:80.</p>
+...
+    </main>
+</body>
+</html>* shutting down connection #0
 ```
 
 The above output demonstrates two important features. One, the part that says `Could not connect to example.com:80` means that the entry provided early was used, in this case, to block traffic to `example.com`. And two, the part of the response that says `Connection: close` is a feature specific for HTTP traffic that removes headers like `Proxy-Connection: keep-alive` and `Connection: keep-alive` after being provided in the request to prevent connection reuse and ensure requests reach their intended destinations.
