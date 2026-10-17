@@ -47,29 +47,33 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 
 ## Features
 
-* Supports Windows, Linux, and macOS (Intel/Apple Silicon) along with AOT compilation.
-* Custom hostname-to-IP mappings using a familiar hosts-file-style format.
-* Supports entries with ports to redirect requests.
-* No administrator privileges required for normal operation.
-* No modification of the system hosts file.
-* No custom root certificate or TLS interception required.
-* End-to-end TLS remains intact for HTTPS connections.
-* Binds only to `127.0.0.1`.
-* Generates a random port on first run and persists it for later runs.
-* Hot-reloads `proxiedhosts.txt` when it changes.
-* Automatically closes only affected connections when mappings change without disrupting unrelated traffic.
-* Loads valid mappings, ignores invalid entries, and retains previous mappings if reloading fails.
-* Automatic fallback to normal DNS resolution for unmapped hosts.
-* Toggle proxy state to enable traffic passthrough without mapping requests.
-* Optionally start tray application on system login.
+* Native AOT compilation for fast startup, low memory usage, and no .NET runtime dependency.
+* Supports HTTP proxying and HTTPS tunneling via `CONNECT` without TLS interception or custom root certificates.
+* No administrator privileges or system hosts-file modifications required.
+* Custom hostname-to-IP mappings with optional port redirection using a familiar hosts-file-style format.
+* Uses normal DNS resolution for unmapped hosts.
+* Toggle proxy state to enable traffic passthrough without stopping the proxy.
+* Hot-reloads `proxiedhosts.txt`, ignoring invalid entries and preserving mappings on failure.
+* Disconnects only connections affected by mapping changes.
+* Binds exclusively to `127.0.0.1` for local access.
+* Generates a random port on first run and persists it for subsequent runs.
+* Optionally starts the tray application at system login.
 * Automatic and manual update checking with option for preview releases.
-* Supports HTTP proxy requests and HTTPS tunneling via `CONNECT` without decrypting TLS.
+* Automatically closes idle connections without network activity.
+* Enforces timeouts for incoming HTTP headers and upstream connection attempts.
+* Gracefully shuts down active connections before forcing them to close.
 * Prevents incorrect HTTP connection reuse by enforcing `Connection: close` on requests and responses.
 * Preserves tunnel data received alongside `CONNECT` headers to prevent data loss.
 * Supports TCP half-close to allow remaining traffic to finish when one direction closes.
-* Enforces timeouts for incoming HTTP headers and upstream connection attempts.
-* Automatically closes idle connections after a set time without network activity.
-* Allows active connections to finish gracefully during shutdown before forcing them to close.
+
+## Compatibility
+Below is a list of supported platforms for each tool variant.
+
+| Platform   | Console App | Tray App   |
+|------------|:-----------:|:----------:|
+| [![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat\&logo=windows\&logoColor=white)](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on) | ✅ | ✅ |
+| [![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=flat&logo=ubuntu&logoColor=white)](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on) | ✅ | ✅ |
+| [![macOS](https://img.shields.io/badge/macOS-000000?style=flat\&logo=macos\&logoColor=F0F0F0)](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on) | ✅ | ✅ |
 
 ## Usage
 A console application and a system tray/menu bar variant of ProxiedHosts are provided as alternative options. For `proxiedhosts`, run the executable to see the printout of the proxy URL configuration, for example:
