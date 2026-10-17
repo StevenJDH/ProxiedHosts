@@ -26,6 +26,7 @@ namespace ProxiedHosts.Tray.Proxy;
 
 internal sealed class TrayProxyController
 {
+    private readonly ConnectionLogMode _logMode;
     private readonly IProxyLogger _logger;
 
     private CancellationTokenSource? _shutdown;
@@ -49,8 +50,9 @@ internal sealed class TrayProxyController
 
     public string ProxyAddress => _configuration is null ? string.Empty : $"http://{_configuration.ListenAddress}:{Port}";
 
-    public TrayProxyController(IProxyLogger logger)
+    public TrayProxyController(ConnectionLogMode logMode, IProxyLogger logger)
     {
+        _logMode = logMode;
         _logger = logger;
     }
 
@@ -80,7 +82,7 @@ internal sealed class TrayProxyController
                 _proxyState.Toggle();
             }
 
-            _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _configuration.ConnectionLogMode, _logger);
+            _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _logMode, _logger);
             _hostMappings.MappingsReloaded += OnMappingsReloaded;
             _proxyState.Changed += OnProxyStateChanged;
 

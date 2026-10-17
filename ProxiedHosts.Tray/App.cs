@@ -29,6 +29,8 @@ using ProxiedHosts.Tray.Infrastructure;
 using ProxiedHosts.Tray.Logging;
 using ProxiedHosts.Tray.Proxy;
 using System.Text.Json;
+using ProxiedHosts.Core.Configuration;
+using ProxiedHosts.Core.Proxy;
 
 namespace ProxiedHosts.Tray;
 
@@ -77,7 +79,11 @@ public sealed class App : Application
 
             CreateTrayIcon();
 
-            _controller = new TrayProxyController(_logger);
+            var logMode = desktop.Args?.Contains("--log-all", StringComparer.OrdinalIgnoreCase) == true
+                ? ConnectionLogMode.All
+                : ProxyConfiguration.Instance.ConnectionLogMode;
+
+            _controller = new TrayProxyController(logMode, _logger);
             _controller.Changed += OnControllerChanged;
 
             _ = StartProxyAsync();

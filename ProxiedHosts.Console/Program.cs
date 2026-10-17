@@ -33,7 +33,7 @@ internal static class Program
 {
     private static int _updateCheckRunning;
 
-    public static async Task<int> Main()
+    public static async Task<int> Main(string[] args)
     {
         SystemConsole.OutputEncoding = new UTF8Encoding(false);
 
@@ -56,12 +56,13 @@ internal static class Program
             }
 
             var configuration = ProxyConfiguration.Instance;
+            var logMode = args.Contains("--log-all", StringComparer.OrdinalIgnoreCase) ? ConnectionLogMode.All : configuration.ConnectionLogMode;
             var currentVersion = ApplicationMetadata.Instance.Version;
             using var hostMappings = new HostMappingProvider(configuration.HostsFilePath, logger);
             var portProvider = new PortProvider();
             var port = await portProvider.GetOrCreateAvailablePortAsync(shutdown.Token);
             var proxyState = new ProxyState();
-            var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, configuration.ConnectionLogMode, logger);
+            var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, logMode, logger);
             var proxy = new ProxyServer(configuration.ListenAddress, port, connectionHandler);
 
             hostMappings.MappingsReloaded += connectionHandler.DisconnectChangedConnections;
