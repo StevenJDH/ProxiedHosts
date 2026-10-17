@@ -449,7 +449,7 @@ public sealed class App : Application
                           Installed version: {currentVersion}
                           Available version: {update.Version}
                             
-                          "Would you like to open the GitHub release page?"
+                          Would you like to open the GitHub release page?
                           """,
             () => OpenReleasePage(update.Url));
 
