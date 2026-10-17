@@ -41,6 +41,25 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
       HTTP proxy errors.
     </td>
   </tr>
+  <tr>
+    <td align="center">
+      <img src="screenshots/tray-linux-gnome.png" width="260"
+        title="GNOME Desktop" alt="GNOME Desktop"
+      /><br>
+      <b>GNOME Desktop</b><br>
+      Ubuntu Desktop Environment.
+    </td>
+    <td align="center">
+      <img src="screenshots/tray-linux-kde.png" width="260"
+        title="KDE Plasma" alt="KDE Plasma"
+      /><br>
+      <b>KDE Plasma</b><br>
+      Kubuntu Desktop Environment.
+    </td>
+    <td align="center">
+      <a href="./screenshots/">More...</a>
+    </td>
+  </tr>
 </table>
 
 [![Buy me a coffee](https://img.shields.io/static/v1?label=Buy%20me%20a&message=coffee&color=important&style=flat&logo=buy-me-a-coffee&logoColor=white)](https://www.buymeacoffee.com/stevenjdh)
@@ -71,9 +90,9 @@ Below is a list of supported platforms for each tool variant.
 
 | Platform   | Console App | Tray App   |
 |------------|:-----------:|:----------:|
-| [![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat\&logo=windows\&logoColor=white)](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on) | ✅ | ✅ |
-| [![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=flat&logo=ubuntu&logoColor=white)](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on) | ✅ | ✅ |
-| [![macOS](https://img.shields.io/badge/macOS-000000?style=flat\&logo=macos\&logoColor=F0F0F0)](https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on) | ✅ | ✅ |
+| ![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTEgNC41IDEwLjUgM3Y4SDF6bTExLTEuNzVMMjMgMXYxMEgxMnpNMSAxM2g5LjV2OEwxIDE5LjV6bTExIDBoMTF2MTBsLTExLTEuNzV6Ii8+PC9zdmc+&logoColor=white) | ✅ | ✅ |
+| ![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black) ![KDE](https://img.shields.io/badge/KDE%20Plasma-4B6EAF?style=flat&logo=kde&logoColor=black) ![GNOME](https://img.shields.io/badge/GNOME%20Desktop-E95420?style=flat&logo=gnome&logoColor=black) | ✅ | ✅ |
+| ![macOS](https://img.shields.io/badge/macOS-000000?style=flat&logo=apple&logoColor=F0F0F0) | ✅ | ✅ |
 
 ## Usage
 A console application and a system tray/menu bar variant of ProxiedHosts are provided as alternative options. For `proxiedhosts`, run the executable to see the printout of the proxy URL configuration, for example:
