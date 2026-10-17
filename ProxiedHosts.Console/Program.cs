@@ -37,6 +37,11 @@ internal static class Program
     {
         SystemConsole.OutputEncoding = new UTF8Encoding(false);
 
+        if (!SystemConsole.IsOutputRedirected)
+        {
+            SystemConsole.Title = $"{ApplicationMetadata.Instance.Product} - Console Proxy Manager";
+        }
+
         using var shutdown = new CancellationTokenSource();
         var logger = new ConsoleProxyLogger();
 
@@ -81,6 +86,7 @@ internal static class Program
             SystemConsole.WriteLine("HTTPS is tunneled with CONNECT; TLS is not decrypted or inspected.");
             SystemConsole.WriteLine();
             SystemConsole.WriteLine("P = toggle proxy mappings");
+            SystemConsole.WriteLine("O = open proxy settings...");
             SystemConsole.WriteLine("E = edit proxiedhosts.txt");
             SystemConsole.WriteLine("U = check for updates");
             SystemConsole.WriteLine("A = about ProxiedHosts");
@@ -140,6 +146,17 @@ internal static class Program
             {
                 case ConsoleKey.P:
                     proxyState.Toggle();
+                    break;
+
+                case ConsoleKey.O:
+                    try
+                    {
+                        FileLauncher.OpenSystemProxySettings();
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error($"Failed to open system proxy settings: {ex.Message}");
+                    }
                     break;
 
                 case ConsoleKey.E:
