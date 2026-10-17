@@ -39,8 +39,9 @@ public static class UpdateChecker
         var releasesUrl = GetReleasesUrl(repositoryUrl);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, releasesUrl);
+        var metadata = ApplicationMetadata.Instance;
 
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("ProxiedHosts", "1.0"));
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue(metadata.Product.Replace(' ', '-'), metadata.Version.ToString(2)));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
 
         using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
