@@ -149,25 +149,11 @@ internal static class Program
                     break;
 
                 case ConsoleKey.O:
-                    try
-                    {
-                        FileLauncher.OpenSystemProxySettings();
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error($"Failed to open system proxy settings: {ex.Message}");
-                    }
+                    TryOpen(FileLauncher.OpenSystemProxySettings, "system proxy settings", logger);
                     break;
 
                 case ConsoleKey.E:
-                    try
-                    {
-                        FileLauncher.Open(hostsFilePath);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error($"Failed to open hosts file: {ex.Message}");
-                    }
+                    TryOpen(() => FileLauncher.Open(hostsFilePath), "hosts file", logger);
                     break;
 
                 case ConsoleKey.U:
@@ -179,14 +165,7 @@ internal static class Program
                     break;
 
                 case ConsoleKey.D:
-                    try
-                    {
-                        FileLauncher.OpenUrl(ApplicationMetadata.Instance.FixedDonationUrl);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error($"Failed to open donation page: {ex.Message}");
-                    }
+                    TryOpen(() => FileLauncher.OpenUrl(ApplicationMetadata.Instance.FixedDonationUrl), "donation page", logger);
                     break;
 
                 case ConsoleKey.Q:
@@ -197,6 +176,18 @@ internal static class Program
                     }
                     return;
             }
+        }
+    }
+
+    private static void TryOpen(Action action, string description, IProxyLogger logger)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"Failed to open {description}: {ex.Message}");
         }
     }
 
