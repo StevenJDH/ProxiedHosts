@@ -42,9 +42,14 @@ public sealed class App : Application
     private IClassicDesktopStyleApplicationLifetime? _desktop;
     private TrayProxyController? _controller;
 
+    private const int MaxStartAttempts = 3;
+    private static readonly TimeSpan StartRetryDelay = TimeSpan.FromSeconds(2);
+    private readonly CancellationTokenSource _startupCancellation = new();
+
     private TrayIcon? _trayIcon;
     private NativeMenuItem? _statusItem;
     private NativeMenuItem? _proxyItem;
+    private NativeMenuItem? _startProxyItem;
     private NativeMenuItem? _mappingsItem;
     private NativeMenuItem? _startupItem;
     private NativeMenuItem? _checkUpdatesItem;
@@ -53,6 +58,9 @@ public sealed class App : Application
     private NativeMenuItem? _openHostsItem;
     private AboutDialog? _aboutDialog;
 
+    private Task? _startTask;
+    private bool _startingProxy;
+    private int _startAttempts;
     private int _shutdownStarted;
 
     public override void Initialize()
@@ -87,7 +95,7 @@ public sealed class App : Application
             _controller = new TrayProxyController(logMode, _logger, diagnostics);
             _controller.Changed += OnControllerChanged;
 
-            _ = StartProxyAsync();
+            Dispatcher.UIThread.Post(() => BeginProxyStart());
 
             // Check once at startup without blocking application initialization.
             Dispatcher.UIThread.Post(() => _ = CheckForUpdatesAsync(automatic: true));
@@ -98,17 +106,24 @@ public sealed class App : Application
 
     private void CreateTrayIcon()
     {
-        _statusItem = new NativeMenuItem("Status: Starting...")
+        _statusItem = new NativeMenuItem("◌ Status: Starting...")
         {
             IsEnabled = false
         };
 
-        _proxyItem = new NativeMenuItem("Proxy: Starting...")
+        _proxyItem = new NativeMenuItem("⇄ Proxy: Starting...")
         {
             IsEnabled = false
         };
 
-        var openProxySettingsItem = new NativeMenuItem("Open proxy settings...");
+        _startProxyItem = new NativeMenuItem("▶ Start proxy")
+        {
+            IsVisible = false
+        };
+
+        _startProxyItem.Click += (_, _) => BeginProxyStart(manual: true);
+
+        var openProxySettingsItem = new NativeMenuItem("⚙ Open proxy settings...");
 
         openProxySettingsItem.Click += (_, _) =>
         {
@@ -227,6 +242,7 @@ public sealed class App : Application
         {
             _statusItem,
             _proxyItem,
+            _startProxyItem,
             openProxySettingsItem,
 
             new NativeMenuItemSeparator(),
@@ -315,31 +331,119 @@ public sealed class App : Application
         }
     }
 
+    private void BeginProxyStart(bool manual = false)
+    {
+        if (_startingProxy || Volatile.Read(ref _shutdownStarted) != 0)
+        {
+            return;
+        }
+
+        if (manual)
+        {
+            _startAttempts = 0;
+        }
+
+        if (_startAttempts >= MaxStartAttempts)
+        {
+            UpdateTrayState();
+            return;
+        }
+
+        _startTask = StartProxyAsync();
+    }
+    
     private async Task StartProxyAsync()
     {
+        _startingProxy = true;
+
         try
         {
-            await _controller!.StartAsync(_settings.MappingsActive);
+            await Dispatcher.UIThread.InvokeAsync(UpdateTrayState);
 
-            UpdateTrayState();
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"Failed to start proxy: {ex}");
-
-            await Dispatcher.UIThread.InvokeAsync(() =>
+            while (_startAttempts < MaxStartAttempts)
             {
-                _statusItem!.Header = "Status: Failed";
-                _mappingsItem!.IsEnabled = false;
-                _openHostsItem!.IsEnabled = false;
-                _trayIcon!.ToolTipText = "ProxiedHosts - Failed";
-            });
+                _startupCancellation.Token.ThrowIfCancellationRequested();
+
+                var attempt = ++_startAttempts;
+
+                if (await TryStartProxyAsync(attempt))
+                {
+                    return;
+                }
+
+                if (_startAttempts < MaxStartAttempts)
+                {
+                    await Task.Delay(StartRetryDelay, _startupCancellation.Token);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_startupCancellation.IsCancellationRequested)
+        {
+            // Application is shutting down.
+        }
+        finally
+        {
+            _startingProxy = false;
+
+            if (Volatile.Read(ref _shutdownStarted) == 0)
+            {
+                await Dispatcher.UIThread.InvokeAsync(UpdateTrayState);
+            }
         }
     }
 
+    private async Task<bool> TryStartProxyAsync(int attempt)
+    {
+        try
+        {
+            if (attempt > 1)
+            {
+                _logger.Warning($"Retrying proxy startup (attempt {attempt}/{MaxStartAttempts})...");
+            }
+
+            await _controller!.StopAsync();
+
+            _startupCancellation.Token.ThrowIfCancellationRequested();
+
+            await _controller.StartAsync(_settings.MappingsActive);
+
+            if (_controller.HasFailed)
+            {
+                _logger.Warning("Proxy stopped during startup.");
+                return false;
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException) when (_startupCancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Proxy startup attempt {attempt}/{MaxStartAttempts} failed: {ex.Message}");
+
+            return false;
+        }
+    }
+    
     private void OnControllerChanged()
     {
-        Dispatcher.UIThread.Post(UpdateTrayState);
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (Volatile.Read(ref _shutdownStarted) != 0)
+            {
+                return;
+            }
+
+            if (_controller?.HasFailed == true && !_startingProxy && _startAttempts < MaxStartAttempts)
+            {
+                BeginProxyStart();
+                return;
+            }
+
+            UpdateTrayState();
+        });
     }
 
     private void UpdateTrayState()
@@ -349,11 +453,24 @@ public sealed class App : Application
             return;
         }
 
+        if (_startingProxy)
+        {
+            _statusItem!.Header = "◌ Status: Starting...";
+            _proxyItem!.Header = "⇄ Proxy: Starting...";
+            _startProxyItem!.IsVisible = false;
+            _mappingsItem!.IsEnabled = false;
+            _openHostsItem!.IsEnabled = false;
+            _trayIcon!.ToolTipText = "ProxiedHosts - Starting";
+
+            return;
+        }
+
         if (_controller.HasFailed)
         {
-            _statusItem!.Header = "Status: Failed";
-            _proxyItem!.Header = "Proxy: Stopped";
             _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", false);
+            _statusItem!.Header = "⚠ Status: Failed";
+            _proxyItem!.Header = "⇄ Proxy: Stopped";
+            _startProxyItem!.IsVisible = _startAttempts >= MaxStartAttempts;
             _mappingsItem.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
             _trayIcon!.ToolTipText = "ProxiedHosts - Failed";
@@ -361,11 +478,12 @@ public sealed class App : Application
             return;
         }
 
-        int mappingCount = _controller.MappingCount;
-        string s = mappingCount > 1 ? "s" : "";
+        var mappingCount = _controller.MappingCount;
+        var s = mappingCount > 1 ? "s" : "";
 
-        _statusItem!.Header = _controller.IsActive ? "Status: Active" : "Status: Inactive";
-        _proxyItem!.Header = $"Proxy: {_controller.ProxyAddress}";
+        _statusItem!.Header = _controller.IsActive ? "● Status: Active" : "○ Status: Inactive";
+        _proxyItem!.Header = $"⇄ Proxy: {_controller.ProxyAddress}";
+        _startProxyItem!.IsVisible = false;
         _mappingsItem!.Header = ToggleHeader($"Enable mappings ({mappingCount})", _controller.IsActive);
         _mappingsItem.IsEnabled = true;
         _openHostsItem!.IsEnabled = true;
@@ -400,8 +518,7 @@ public sealed class App : Application
 
             if (string.IsNullOrWhiteSpace(repositoryUrl))
             {
-                throw new InvalidOperationException(
-                    "Could not determine the repository URL.");
+                throw new InvalidOperationException("Could not determine the repository URL.");
             }
 
             var update = await UpdateChecker.CheckAsync(currentVersion, repositoryUrl, _settings.IncludePreviewReleases);
@@ -607,6 +724,13 @@ public sealed class App : Application
 
         try
         {
+            await _startupCancellation.CancelAsync();
+
+            if (_startTask is not null)
+            {
+                await _startTask;
+            }
+
             if (_controller is not null)
             {
                 _controller.Changed -= OnControllerChanged;
@@ -616,12 +740,13 @@ public sealed class App : Application
         }
         catch (Exception ex)
         {
-            _logger.Error($"Failed to stop proxy during shutdown: {ex}");
+            _logger.Error($"Failed to stop proxy during shutdown: {ex.Message}");
         }
         finally
         {
             try
             {
+                _startupCancellation.Dispose();
                 _aboutDialog?.Close();
                 _updateDialog?.Close();
                 _trayIcon?.Dispose();

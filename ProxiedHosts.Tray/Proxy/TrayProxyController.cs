@@ -111,8 +111,11 @@ internal sealed class TrayProxyController
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to clean up after proxy startup error: {ex}");
+                _logger.Error($"Failed to clean up after proxy startup error: {ex.Message}");
             }
+
+            HasFailed = true;
+            Changed?.Invoke();
 
             throw;
         }
@@ -136,7 +139,7 @@ internal sealed class TrayProxyController
         }
         catch (Exception ex)
         {
-            _logger.Error($"Proxy task failed: {ex}");
+            _logger.Error($"Proxy task failed: {ex.Message}");
         }
 
         if (cancellationToken.IsCancellationRequested)
