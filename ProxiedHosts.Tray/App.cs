@@ -44,7 +44,7 @@ public sealed class App : Application
 
     private const int MaxStartAttempts = 3;
     private static readonly TimeSpan StartRetryDelay = TimeSpan.FromSeconds(2);
-    private readonly CancellationTokenSource _startupCancellation = new();
+    private readonly CancellationTokenSource _lifetimeCancellation = new();
 
     private TrayIcon? _trayIcon;
     private NativeMenuItem? _statusItem;
@@ -362,7 +362,7 @@ public sealed class App : Application
 
             while (_startAttempts < MaxStartAttempts)
             {
-                _startupCancellation.Token.ThrowIfCancellationRequested();
+                _lifetimeCancellation.Token.ThrowIfCancellationRequested();
 
                 var attempt = ++_startAttempts;
 
@@ -373,11 +373,11 @@ public sealed class App : Application
 
                 if (_startAttempts < MaxStartAttempts)
                 {
-                    await Task.Delay(StartRetryDelay, _startupCancellation.Token);
+                    await Task.Delay(StartRetryDelay, _lifetimeCancellation.Token);
                 }
             }
         }
-        catch (OperationCanceledException) when (_startupCancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
         {
             // Application is shutting down.
         }
@@ -403,7 +403,7 @@ public sealed class App : Application
 
             await _controller!.StopAsync();
 
-            _startupCancellation.Token.ThrowIfCancellationRequested();
+            _lifetimeCancellation.Token.ThrowIfCancellationRequested();
 
             await _controller.StartAsync(_settings.MappingsActive);
 
@@ -415,7 +415,7 @@ public sealed class App : Application
 
             return true;
         }
-        catch (OperationCanceledException) when (_startupCancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
         {
             throw;
         }
@@ -521,7 +521,7 @@ public sealed class App : Application
                 throw new InvalidOperationException("Could not determine the repository URL.");
             }
 
-            var update = await UpdateChecker.CheckAsync(currentVersion, repositoryUrl, _settings.IncludePreviewReleases);
+            var update = await UpdateChecker.CheckAsync(currentVersion, repositoryUrl, _settings.IncludePreviewReleases, _lifetimeCancellation.Token);
 
             if (Volatile.Read(ref _shutdownStarted) != 0)
             {
@@ -530,14 +530,21 @@ public sealed class App : Application
 
             HandleUpdateResult(update, currentVersion, automatic);
         }
+        catch (OperationCanceledException) when (_lifetimeCancellation.IsCancellationRequested)
+        {
+            // Application is shutting down.
+        }
         catch (Exception ex)
         {
             HandleUpdateCheckError(ex, automatic);
         }
         finally
         {
-            _checkUpdatesItem.IsEnabled = true;
-            _previewReleasesItem.IsEnabled = true;
+            if (Volatile.Read(ref _shutdownStarted) == 0)
+            {
+                _checkUpdatesItem.IsEnabled = true;
+                _previewReleasesItem.IsEnabled = true;
+            }
         }
     }
 
@@ -724,7 +731,7 @@ public sealed class App : Application
 
         try
         {
-            await _startupCancellation.CancelAsync();
+            await _lifetimeCancellation.CancelAsync();
 
             if (_startTask is not null)
             {
@@ -746,7 +753,7 @@ public sealed class App : Application
         {
             try
             {
-                _startupCancellation.Dispose();
+                _lifetimeCancellation.Dispose();
                 _aboutDialog?.Close();
                 _updateDialog?.Close();
                 _trayIcon?.Dispose();
