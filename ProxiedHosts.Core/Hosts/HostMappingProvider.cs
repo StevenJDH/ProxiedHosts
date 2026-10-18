@@ -342,6 +342,7 @@ public sealed class HostMappingProvider : IDisposable
                                 #
                                 # IPv6 addresses with destination ports must use brackets:
                                 # [::1]:8080 ipv6.example.com
+                                
                                 """;
 
         File.WriteAllText(_filePath, template, Encoding.UTF8);
