@@ -79,11 +79,12 @@ public sealed class App : Application
 
             CreateTrayIcon();
 
-            var logMode = desktop.Args?.Contains("--log-all", StringComparer.OrdinalIgnoreCase) == true
+            var diagnostics = desktop.Args?.Contains("--log-diagnostics", StringComparer.OrdinalIgnoreCase) == true;
+            var logMode = diagnostics || desktop.Args?.Contains("--log-all", StringComparer.OrdinalIgnoreCase) == true
                 ? ConnectionLogMode.All
                 : ProxyConfiguration.Instance.ConnectionLogMode;
 
-            _controller = new TrayProxyController(logMode, _logger);
+            _controller = new TrayProxyController(logMode, _logger, diagnostics);
             _controller.Changed += OnControllerChanged;
 
             _ = StartProxyAsync();

@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "ProxiedHosts.Console": {
+      "commandName": "Project"
+    },
+    "ProxiedHosts.Console Diagnostics": {
+      "commandName": "Project",
+      "commandLineArgs": "--log-diagnostics"
+    }
+  }
+}

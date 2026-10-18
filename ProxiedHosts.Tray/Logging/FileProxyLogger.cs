@@ -59,6 +59,8 @@ internal sealed class FileProxyLogger : IProxyLogger
         }
     }
 
+    public void Debug(string message) => Write("DEBUG", message);
+
     public void Information(string message) => Write("INFO", message);
 
     public void Warning(string message) => Write("WARN", message);

@@ -22,6 +22,11 @@ namespace ProxiedHosts.Console.Logging;
 
 internal sealed class ConsoleProxyLogger : IProxyLogger
 {
+    public void Debug(string message)
+    {
+        System.Console.WriteLine($"[{DateTimeOffset.Now:T}] {message}");
+    }
+
     public void Information(string message)
     {
         System.Console.WriteLine($"[{DateTimeOffset.Now:T}] {message}");

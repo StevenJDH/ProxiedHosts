@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "ProxiedHosts.Tray": {
+      "commandName": "Project"
+    },
+    "ProxiedHosts.Tray Diagnostics": {
+      "commandName": "Project",
+      "commandLineArgs": "--log-diagnostics"
+    }
+  }
+}

@@ -22,6 +22,7 @@ using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -46,40 +47,48 @@ public sealed class ProxyConnectionHandler
     private readonly ProxyState _proxyState;
     private readonly ConnectionLogMode _logMode;
     private readonly IProxyLogger _logger;
+    private readonly bool _enableDiagnostics;
+    private long _nextConnectionId;
 
     private readonly ConcurrentDictionary<TcpClient, ActiveConnection> _activeConnections = new();
 
-    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly, IProxyLogger? logger = null)
+    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly, IProxyLogger? logger = null, bool enableDiagnostics = false)
     {
         _hostMappings = hostMappings;
         _proxyState = proxyState;
         _logMode = logMode;
         _logger = logger ?? NullProxyLogger.Instance;
+        _enableDiagnostics = enableDiagnostics;
     }
 
     public async Task HandleClientSafelyAsync(TcpClient client, CancellationToken cancellationToken)
     {
         using (client)
         {
+            var connectionId = _enableDiagnostics ? Interlocked.Increment(ref _nextConnectionId) : 0;
+
             try
             {
-                await HandleClientAsync(client, cancellationToken);
+                await HandleClientAsync(client, connectionId, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // Normal shutdown.
             }
-            catch (IOException)
+            catch (IOException ex)
             {
                 // Normal client or upstream disconnect.
+                LogExpectedDisconnect(connectionId, ex);
             }
-            catch (SocketException)
+            catch (SocketException ex)
             {
                 // Normal client or upstream disconnect.
+                LogExpectedDisconnect(connectionId, ex);
             }
-            catch (ObjectDisposedException)
+            catch (ObjectDisposedException ex)
             {
                 // Connection was closed while being processed.
+                LogExpectedDisconnect(connectionId, ex);
             }
             catch (Exception ex)
             {
@@ -92,7 +101,15 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
+    private void LogExpectedDisconnect(long connectionId, Exception ex)
+    {
+        if (_enableDiagnostics)
+        {
+            _logger.Debug($"Connection #{connectionId} ended with {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private async Task HandleClientAsync(TcpClient client, long connectionId, CancellationToken cancellationToken)
     {
         client.NoDelay = true;
 
@@ -126,6 +143,11 @@ public sealed class ProxyConnectionHandler
 
         var route = ResolveRoute(request.Host, request.Port);
 
+        if (_enableDiagnostics && request.IsConnect)
+        {
+            _logger.Debug($"CONNECT #{connectionId} {request.Host}:{request.Port}: requested ({(route.IsMapped ? "mapped" : "DNS")}).");
+        }
+
         using var upstream = new TcpClient();
         upstream.NoDelay = true;
 
@@ -137,16 +159,27 @@ public sealed class ProxyConnectionHandler
         }
         catch (Exception ex) when (ex is SocketException or TimeoutException)
         {
-            await WriteErrorAsync(clientStream, 502, "Bad Gateway",
-                $"Could not connect to {request.Host}:{request.Port}.", cancellationToken);
+            if (_enableDiagnostics && request.IsConnect)
+            {
+                _logger.Error($"CONNECT #{connectionId} {request.Host}:{request.Port}: upstream connection failed ({ex.GetType().Name}): {ex.Message}");
+            }
+
+            await WriteErrorAsync(clientStream, 502, "Bad Gateway", $"Could not connect to {request.Host}:{request.Port}.", cancellationToken);
+
             return;
         }
 
         await using var upstreamStream = upstream.GetStream();
-
+        await InitializeRelayAsync(clientStream, upstreamStream, requestHeader, request, connectionId, cancellationToken);
+        await RelayBidirectionalAsync(client, upstream, clientStream, upstreamStream, request, connectionId, cancellationToken);
+    }
+    
+    private async Task InitializeRelayAsync(NetworkStream clientStream, NetworkStream upstreamStream, byte[] requestHeader, ProxyRequest request, long connectionId, CancellationToken cancellationToken)
+    {
         if (request.IsConnect)
         {
-            var established = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ProxiedHosts\r\n\r\n");
+            var product = ApplicationMetadata.Instance.Product.Replace(' ', '-');
+            var established = Encoding.ASCII.GetBytes($"HTTP/1.1 200 Connection Established\r\nProxy-Agent: {product}\r\n\r\n");
 
             await clientStream.WriteAsync(established, cancellationToken);
 
@@ -157,6 +190,11 @@ public sealed class ProxyConnectionHandler
             {
                 await upstreamStream.WriteAsync(requestHeader.AsMemory(headerEnd), cancellationToken);
             }
+
+            if (_enableDiagnostics)
+            {
+                _logger.Information($"CONNECT #{connectionId} {request.Host}:{request.Port}: tunnel established.");
+            }
         }
         else
         {
@@ -164,8 +202,6 @@ public sealed class ProxyConnectionHandler
 
             await upstreamStream.WriteAsync(rewrittenHeader, cancellationToken);
         }
-
-        await RelayBidirectionalAsync(client, upstream, clientStream, upstreamStream, request.IsConnect, cancellationToken);
     }
 
     private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, CancellationToken cancellationToken)
@@ -199,17 +235,28 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private static async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream,
-        bool isConnect, CancellationToken cancellationToken)
+    private async Task RelayBidirectionalAsync(TcpClient client, TcpClient upstream, NetworkStream clientStream, NetworkStream upstreamStream,
+        ProxyRequest request, long connectionId, CancellationToken cancellationToken)
     {
+        var isConnect = request.IsConnect;
         var idleTimeout = isConnect ? ProxyConfiguration.Instance.TunnelIdleTimeout : ProxyConfiguration.Instance.IdleTimeout;
         using var idleCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        
+
         idleCancellation.CancelAfter(idleTimeout);
+
+        var startedAt = Stopwatch.GetTimestamp();
+        var destination = $"{request.Host}:{request.Port}";
 
         var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, idleCancellation, idleTimeout);
         var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, idleCancellation, idleTimeout, !isConnect);
+
         var firstCompleted = await Task.WhenAny(clientToUpstream, upstreamToClient);
+        var firstFromClient = ReferenceEquals(firstCompleted, clientToUpstream);
+
+        if (_enableDiagnostics && isConnect)
+        {
+            LogRelayOutcome(firstCompleted, firstFromClient ? "client -> upstream" : "upstream -> client", connectionId, destination, startedAt);
+        }
 
         if (!firstCompleted.IsCompletedSuccessfully)
         {
@@ -226,6 +273,39 @@ public sealed class ProxyConnectionHandler
         {
             // Connection was idle for too long.
         }
+        finally
+        {
+            if (_enableDiagnostics && isConnect)
+            {
+                LogRelayOutcome(firstFromClient ? upstreamToClient : clientToUpstream, firstFromClient ? "upstream -> client" : "client -> upstream", connectionId, destination, startedAt);
+                _logger.Information($"CONNECT #{connectionId} {destination}: tunnel closed after {Stopwatch.GetElapsedTime(startedAt)}.");
+            }
+        }
+    }
+
+    private void LogRelayOutcome(Task task, string direction, long connectionId, string destination, long startedAt)
+    {
+        string outcome;
+
+        if (task.IsCompletedSuccessfully)
+        {
+            outcome = "EOF";
+        }
+        else if (task.IsCanceled)
+        {
+            outcome = "Canceled";
+        }
+        else if (task.Exception is { } exception)
+        {
+            var cause = exception.GetBaseException();
+            outcome = $"Error ({cause.GetType().Name}): {cause.Message}";
+        }
+        else
+        {
+            outcome = "Incomplete";
+        }
+
+        _logger.Information($"CONNECT #{connectionId} {destination} {direction}: {outcome} after {Stopwatch.GetElapsedTime(startedAt)}.");
     }
 
     private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationTokenSource idleCancellation,

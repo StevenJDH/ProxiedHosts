@@ -20,6 +20,8 @@ namespace ProxiedHosts.Core.Logging;
 
 public interface IProxyLogger
 {
+    void Debug(string message);
+
     void Information(string message);
 
     void Warning(string message);
