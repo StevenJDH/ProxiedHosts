@@ -467,10 +467,10 @@ public sealed class App : Application
 
         if (_controller.HasFailed)
         {
-            _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", false);
             _statusItem!.Header = "⚠ Status: Failed";
             _proxyItem!.Header = "⇄ Proxy: Stopped";
             _startProxyItem!.IsVisible = _startAttempts >= MaxStartAttempts;
+            _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", _settings.MappingsActive);
             _mappingsItem.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
             _trayIcon!.ToolTipText = "ProxiedHosts - Failed";
