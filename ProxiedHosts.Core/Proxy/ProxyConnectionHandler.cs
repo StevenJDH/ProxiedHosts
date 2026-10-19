@@ -161,7 +161,7 @@ public sealed class ProxyConnectionHandler
         {
             if (_enableDiagnostics && request.IsConnect)
             {
-                _logger.Error($"CONNECT #{connectionId} {request.Host}:{request.Port}: upstream connection failed ({ex.GetType().Name}): {ex.Message}");
+                _logger.Error($"CONNECT #{connectionId} {request.Host}:{request.Port}: upstream connection failed {DescribeException(ex)}");
             }
 
             await WriteErrorAsync(clientStream, 502, "Bad Gateway", $"Could not connect to {request.Host}:{request.Port}.", cancellationToken);
@@ -247,15 +247,25 @@ public sealed class ProxyConnectionHandler
         var startedAt = Stopwatch.GetTimestamp();
         var destination = $"{request.Host}:{request.Port}";
 
-        var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstream, idleCancellation, idleTimeout);
-        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, client, idleCancellation, idleTimeout, !isConnect);
+        var diagnostics = _enableDiagnostics && isConnect ? new TunnelDiagnostics(GetUpstreamEndpoint(upstream.Client)) : null;
+        Action<int>? recordClientBytes = diagnostics is null ? null : diagnostics.RecordClientToUpstream;
+        Action<int>? recordUpstreamBytes = diagnostics is null ? null : diagnostics.RecordUpstreamToClient;
+
+        // Capture socket references before either relay can close a TcpClient. Maybe by nullable even if defined as non-nullable. See PumpAndHalfCloseAsync() for more details.
+        var clientSocket = client.Client;
+        var upstreamSocket = upstream.Client;
+
+        var clientToUpstream = PumpAndHalfCloseAsync(clientStream, upstreamStream, upstreamSocket, idleCancellation, idleTimeout, recordClientBytes);
+        var upstreamToClient = PumpAndHalfCloseAsync(upstreamStream, clientStream, clientSocket, idleCancellation, idleTimeout, recordUpstreamBytes, !isConnect);
 
         var firstCompleted = await Task.WhenAny(clientToUpstream, upstreamToClient);
         var firstFromClient = ReferenceEquals(firstCompleted, clientToUpstream);
 
-        if (_enableDiagnostics && isConnect)
+        if (diagnostics is not null)
         {
-            LogRelayOutcome(firstCompleted, firstFromClient ? "client -> upstream" : "upstream -> client", connectionId, destination, startedAt);
+            var firstDirection = firstFromClient ? "client -> upstream" : "upstream -> client";
+
+            LogRelayOutcome(firstCompleted, $"{firstDirection} [first observed]", connectionId, destination, startedAt);
         }
 
         if (!firstCompleted.IsCompletedSuccessfully)
@@ -275,12 +285,22 @@ public sealed class ProxyConnectionHandler
         }
         finally
         {
-            if (_enableDiagnostics && isConnect)
-            {
-                LogRelayOutcome(firstFromClient ? upstreamToClient : clientToUpstream, firstFromClient ? "upstream -> client" : "client -> upstream", connectionId, destination, startedAt);
-                _logger.Information($"CONNECT #{connectionId} {destination}: tunnel closed after {Stopwatch.GetElapsedTime(startedAt)}.");
-            }
+            LogTunnelCompletion(diagnostics, clientToUpstream, upstreamToClient, firstFromClient, connectionId, destination, startedAt);
         }
+    }
+    
+    private void LogTunnelCompletion(TunnelDiagnostics? diagnostics, Task clientToUpstream, Task upstreamToClient, bool firstFromClient, long connectionId, string destination, long startedAt)
+    {
+        if (diagnostics is null)
+        {
+            return;
+        }
+
+        var secondTask = firstFromClient ? upstreamToClient : clientToUpstream;
+        var secondDirection = firstFromClient ? "upstream -> client" : "client -> upstream";
+
+        LogRelayOutcome(secondTask, $"{secondDirection} [second]", connectionId, destination, startedAt);
+        _logger.Information($"CONNECT #{connectionId} {destination}: tunnel closed after {Stopwatch.GetElapsedTime(startedAt)}; {diagnostics.GetSummary()}");
     }
 
     private void LogRelayOutcome(Task task, string direction, long connectionId, string destination, long startedAt)
@@ -297,8 +317,7 @@ public sealed class ProxyConnectionHandler
         }
         else if (task.Exception is { } exception)
         {
-            var cause = exception.GetBaseException();
-            outcome = $"Error ({cause.GetType().Name}): {cause.Message}";
+            outcome = $"Error {DescribeException(exception)}";
         }
         else
         {
@@ -307,9 +326,44 @@ public sealed class ProxyConnectionHandler
 
         _logger.Information($"CONNECT #{connectionId} {destination} {direction}: {outcome} after {Stopwatch.GetElapsedTime(startedAt)}.");
     }
+    
+    private static string GetUpstreamEndpoint(Socket? socket)
+    {
+        try
+        {
+            return socket?.RemoteEndPoint?.ToString() ?? "unavailable";
+        }
+        catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+        {
+            return "unavailable";
+        }
+    }
 
-    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, TcpClient destinationClient, CancellationTokenSource idleCancellation,
-        TimeSpan idleTimeout, bool rewriteResponse = false)
+    private static string DescribeException(Exception exception)
+    {
+        var cause = exception.GetBaseException();
+
+        var details = cause is SocketException socketException
+            ? $"socket={socketException.SocketErrorCode}, native={socketException.NativeErrorCode}"
+            : $"socket=unavailable, hresult=0x{cause.HResult:X8}";
+
+        return $"({cause.GetType().Name}, {details}): {cause.Message}";
+    }
+
+    /// <summary>
+    /// Relays data in one direction and half-closes the destination socket
+    /// when forwarding completes.
+    /// </summary>
+    /// <remarks>
+    /// The destination socket is captured before relay tasks begin to avoid
+    /// accessing <see cref="TcpClient.Client"/> during concurrent shutdown.
+    /// The socket may be null if the client was already disposed, so null
+    /// and disposed sockets are safely handled during half-close.
+    /// See <see href="https://github.com/dotnet/runtime/issues/97050">
+    /// .NET runtime issue #97050</see> for details.
+    /// </remarks>
+    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, Socket? destinationSocket, CancellationTokenSource idleCancellation,
+        TimeSpan idleTimeout, Action<int>? recordForwardedBytes = null, bool rewriteResponse = false)
     {
         if (rewriteResponse)
         {
@@ -317,20 +371,20 @@ public sealed class ProxyConnectionHandler
         }
         else
         {
-            await PumpAsync(source, destination, idleCancellation, idleTimeout);
+            await PumpAsync(source, destination, idleCancellation, idleTimeout, recordForwardedBytes);
         }
 
         try
         {
             // Signal EOF without closing the receiving direction.
-            destinationClient.Client.Shutdown(SocketShutdown.Send);
+            destinationSocket?.Shutdown(SocketShutdown.Send);
         }
         catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
         {
             // The destination may already be closed.
         }
     }
-    
+
     private static async Task ForwardHttpResponseAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation, TimeSpan idleTimeout)
     {
         var buffered = Array.Empty<byte>();
@@ -409,7 +463,7 @@ public sealed class ProxyConnectionHandler
         return parts.Length >= 2 && int.TryParse(parts[1], out var statusCode) && statusCode is >= 100 and < 200 and not 101;
     }
 
-    private static async Task PumpAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation, TimeSpan idleTimeout)
+    private static async Task PumpAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation, TimeSpan idleTimeout, Action<int>? recordForwardedBytes = null)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(32 * 1024);
         var cancellationToken = idleCancellation.Token;
@@ -427,6 +481,8 @@ public sealed class ProxyConnectionHandler
 
                 await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
 
+                recordForwardedBytes?.Invoke(read);
+
                 // Activity in either direction resets the shared timeout.
                 idleCancellation.CancelAfter(idleTimeout);
             }
@@ -436,7 +492,7 @@ public sealed class ProxyConnectionHandler
             ArrayPool<byte>.Shared.Return(buffer);
         }
     }
-
+    
     private static async Task WriteErrorAsync(Stream stream, int statusCode, string reason, string message, CancellationToken cancellationToken)
     {
         var appName = WebUtility.HtmlEncode(ApplicationMetadata.Instance.Product);
