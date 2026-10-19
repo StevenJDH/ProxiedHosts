@@ -131,6 +131,9 @@ With the proxy configuration in hand, configure the client application or system
 > [!TIP]
 > For Linux and macOS, run `chmod +x proxiedhosts` to set the execution bit so that `./proxiedhosts` works for running the application. Also, macOS users will likely need to run `xattr -d com.apple.quarantine proxiedhosts` to remove the quarantine attribute so that it doesn't get block by Gatekeeper. Alternatively, the execution can be approved by going to `System Settings > Privacy & Security`. The same applies for `proxiedhosts-tray`. For Windows, if there is a blue popup, click the `More info` text, and then click the `Run anyway` button. Subsequent runs will not require this.
 
+> [!IMPORTANT]  
+> Microsoft Teams for work or school may disconnect when setting the proxy at the system level. To prevent this issue, add `teams.microsoft.com;*.teams.microsoft.com;teams.cloud.microsoft;*.teams.cloud.microsoft;login.microsoftonline.com` to the system proxy exception list. This solution is based on this [Microsoft Tech Community discussion](https://techcommunity.microsoft.com/discussions/teamsdeveloper/when-using-proxy-on-localhost-teams-fails-to-establish-tcp-connection-for-login/4146890), and it aligns with [Microsoft's recommendation](https://learn.microsoft.com/en-us/microsoftteams/proxy-servers-for-skype-for-business-online) for bypassing proxy servers for Teams traffic.
+
 ### Proxy port generation
 On first run, the application selects an unused port in the range `20000-45000` and writes it to:
 
