@@ -111,7 +111,7 @@ public sealed class App : Application
             IsEnabled = false
         };
 
-        _proxyItem = new NativeMenuItem("⇄ Proxy: Starting...")
+        _proxyItem = new NativeMenuItem("↔ Proxy: Starting...")
         {
             IsEnabled = false
         };
@@ -456,7 +456,7 @@ public sealed class App : Application
         if (_startingProxy)
         {
             _statusItem!.Header = "◌ Status: Starting...";
-            _proxyItem!.Header = "⇄ Proxy: Starting...";
+            _proxyItem!.Header = "↔ Proxy: Starting...";
             _startProxyItem!.IsVisible = false;
             _mappingsItem!.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
@@ -468,7 +468,7 @@ public sealed class App : Application
         if (_controller.HasFailed)
         {
             _statusItem!.Header = "⚠ Status: Failed";
-            _proxyItem!.Header = "⇄ Proxy: Stopped";
+            _proxyItem!.Header = "↔ Proxy: Stopped";
             _startProxyItem!.IsVisible = _startAttempts >= MaxStartAttempts;
             _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", _settings.MappingsActive);
             _mappingsItem.IsEnabled = false;
@@ -482,7 +482,7 @@ public sealed class App : Application
         var s = mappingCount > 1 ? "s" : "";
 
         _statusItem!.Header = _controller.IsActive ? "● Status: Active" : "○ Status: Inactive";
-        _proxyItem!.Header = $"⇄ Proxy: {_controller.ProxyAddress}";
+        _proxyItem!.Header = $"↔ Proxy: {_controller.ProxyAddress}";
         _startProxyItem!.IsVisible = false;
         _mappingsItem!.Header = ToggleHeader($"Enable mappings ({mappingCount})", _controller.IsActive);
         _mappingsItem.IsEnabled = true;
