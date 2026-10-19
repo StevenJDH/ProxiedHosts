@@ -245,6 +245,26 @@ ProxiedHosts supports running at system login to maintain connectivity for appli
 > [!TIP]
 > Move the proxiedhosts-tray application to a permanent location before enabling startup at login. Likewise, before removing the application or changing its location, ensure to disable the startup first.
 
+## Connection logging
+
+The following command-line flags enable additional connection logging in both the console and tray applications for troubleshooting connectivity issues without modifying the default configuration.
+
+| Flag                | Description                                                         |
+|---------------------|---------------------------------------------------------------------|
+| `--log-all`         | Logs all proxied connection destinations, including unmapped hosts. |
+| `--log-diagnostics` | Enables detailed HTTPS tunnel diagnostics, including connection establishment, duration, disconnections, and errors. Automatically enables `--log-all` behavior. |
+
+Example usage:
+
+```batch
+proxiedhosts.exe --log-all
+proxiedhosts-tray.exe --log-diagnostics
+```
+
+Without either flag, the application only logs mapped requests. Flags apply only to the current session. Fully exit the application before relaunching with different flags, or to launch without them to restore normal logging.
+
+Diagnostic logging records connection details without decrypting or inspecting HTTPS traffic.
+
 ## Limitations
 Below is a list of intentional limitations that may or may not be needed in most or all cases.
 
