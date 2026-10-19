@@ -106,7 +106,9 @@ public sealed class App : Application
 
     private void CreateTrayIcon()
     {
-        _statusItem = new NativeMenuItem("◌ Status: Starting...")
+        var product = ApplicationMetadata.Instance.Product;
+
+        _statusItem = new NativeMenuItem(" ◌ Status: Starting...")
         {
             IsEnabled = false
         };
@@ -207,7 +209,7 @@ public sealed class App : Application
             }
         };
 
-        var aboutItem = new NativeMenuItem("About ProxiedHosts");
+        var aboutItem = new NativeMenuItem($"About {product}");
 
         aboutItem.Click += (_, _) =>
         {
@@ -231,7 +233,7 @@ public sealed class App : Application
             }
         };
 
-        var quitItem = new NativeMenuItem("Quit ProxiedHosts");
+        var quitItem = new NativeMenuItem($"Quit {product}");
 
         quitItem.Click += (_, _) =>
         {
@@ -270,7 +272,7 @@ public sealed class App : Application
         _trayIcon = new TrayIcon
         {
             Icon = new WindowIcon(iconStream),
-            ToolTipText = "ProxiedHosts - Starting",
+            ToolTipText = $"{product} - Starting",
             Menu = menu
         };
 
@@ -448,6 +450,8 @@ public sealed class App : Application
 
     private void UpdateTrayState()
     {
+        var product = ApplicationMetadata.Instance.Product;
+
         if (_controller is null)
         {
             return;
@@ -455,25 +459,25 @@ public sealed class App : Application
 
         if (_startingProxy)
         {
-            _statusItem!.Header = "◌ Status: Starting...";
+            _statusItem!.Header = " ◌ Status: Starting...";
             _proxyItem!.Header = "↔ Proxy: Starting...";
             _startProxyItem!.IsVisible = false;
             _mappingsItem!.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
-            _trayIcon!.ToolTipText = "ProxiedHosts - Starting";
+            _trayIcon!.ToolTipText = $"{product} - Starting";
 
             return;
         }
 
         if (_controller.HasFailed)
         {
-            _statusItem!.Header = "⚠ Status: Failed";
+            _statusItem!.Header = "⚠Status: Failed";
             _proxyItem!.Header = "↔ Proxy: Stopped";
             _startProxyItem!.IsVisible = _startAttempts >= MaxStartAttempts;
             _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", _settings.MappingsActive);
             _mappingsItem.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
-            _trayIcon!.ToolTipText = "ProxiedHosts - Failed";
+            _trayIcon!.ToolTipText = $"{product} - Failed";
 
             return;
         }
@@ -481,13 +485,13 @@ public sealed class App : Application
         var mappingCount = _controller.MappingCount;
         var s = mappingCount > 1 ? "s" : "";
 
-        _statusItem!.Header = _controller.IsActive ? "● Status: Active" : "○ Status: Inactive";
+        _statusItem!.Header = _controller.IsActive ? " ● Status: Active" : " ○ Status: Inactive";
         _proxyItem!.Header = $"↔ Proxy: {_controller.ProxyAddress}";
         _startProxyItem!.IsVisible = false;
         _mappingsItem!.Header = ToggleHeader($"Enable mappings ({mappingCount})", _controller.IsActive);
         _mappingsItem.IsEnabled = true;
         _openHostsItem!.IsEnabled = true;
-        _trayIcon!.ToolTipText = _controller.IsActive ? $"ProxiedHosts - Active ({mappingCount} mapping{s})" : "ProxiedHosts - Inactive";
+        _trayIcon!.ToolTipText = _controller.IsActive ? $"{product} - Active ({mappingCount} mapping{s})" : $"{product} - Inactive";
     }
 
     private async Task CheckForUpdatesAsync(bool automatic = false)
@@ -550,11 +554,13 @@ public sealed class App : Application
 
     private void HandleUpdateResult(AvailableUpdate? update, Version currentVersion, bool automatic)
     {
+        var product = ApplicationMetadata.Instance.Product;
+
         if (update is null)
         {
             if (!automatic)
             {
-                ShowUpdateDialog($"ProxiedHosts is up to date.\n\nInstalled version: {currentVersion}");
+                ShowUpdateDialog($"{product} is up to date.\n\nInstalled version: {currentVersion}");
             }
 
             return;
@@ -575,7 +581,7 @@ public sealed class App : Application
         var releaseType = update.IsPreview ? "preview version" : "version";
 
         ShowUpdateDialog($"""
-                          A new {releaseType} of ProxiedHosts is available.
+                          A new {releaseType} of {product} is available.
                                    
                           Installed version: {currentVersion}
                           Available version: {update.Version}

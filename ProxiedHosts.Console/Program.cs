@@ -48,10 +48,11 @@ internal static class Program
         try
         {
             using var instance = SingleInstanceGuard.TryAcquire();
+            var product = ApplicationMetadata.Instance.Product;
 
             if (instance is null)
             {
-                logger.Error("ProxiedHosts is already running.");
+                logger.Error($"{product} is already running.");
                 return 1;
             }
 
@@ -77,7 +78,7 @@ internal static class Program
             };
 
             SystemConsole.WriteLine();
-            SystemConsole.WriteLine("ProxiedHosts");
+            SystemConsole.WriteLine($"{product}");
             SystemConsole.WriteLine("------------------");
             SystemConsole.WriteLine($"Proxy      : http://127.0.0.1:{port}");
             SystemConsole.WriteLine($"Port       : {port} (stable and persisted)");
@@ -91,7 +92,7 @@ internal static class Program
             SystemConsole.WriteLine("O = open proxy settings...");
             SystemConsole.WriteLine("E = edit proxiedhosts.txt");
             SystemConsole.WriteLine("U = check for updates");
-            SystemConsole.WriteLine("A = about ProxiedHosts");
+            SystemConsole.WriteLine($"A = about {product}");
             SystemConsole.WriteLine("D = donate 5€ (PayPal)...");
             SystemConsole.WriteLine("Q / Ctrl+C = quit");
             SystemConsole.WriteLine();
@@ -230,7 +231,7 @@ internal static class Program
             {
                 if (!automatic)
                 {
-                    logger.Information($"ProxiedHosts is up to date (v{currentVersion}).");
+                    logger.Information($"{ApplicationMetadata.Instance.Product} is up to date (v{currentVersion}).");
                 }
 
                 return;
