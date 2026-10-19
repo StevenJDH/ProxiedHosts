@@ -14,8 +14,8 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\ProxiedHosts.Core\ProxiedHosts.Core.csproj" />
-		<PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
-		<PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+		<PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+		<PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
 	</ItemGroup>
 	
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
