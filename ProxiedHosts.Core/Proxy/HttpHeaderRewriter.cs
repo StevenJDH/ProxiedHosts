@@ -40,7 +40,7 @@ internal static class HttpHeaderRewriter
             lines[0] = $"{parts[0]} {pathAndQuery} {parts[2]}";
         }
 
-        return Rewrite(rawHeader, lines, bodyStart);
+        return Rewrite(rawHeader, lines, bodyStart, uri.Authority);
     }
 
     public static byte[] RewriteResponse(byte[] rawHeader)
@@ -66,12 +66,24 @@ internal static class HttpHeaderRewriter
         return (lines, headerEnd + 4);
     }
 
-    private static byte[] Rewrite(byte[] rawHeader, string[] lines, int bodyStart)
+    private static byte[] Rewrite(byte[] rawHeader, string[] lines, int bodyStart, string? targetAuthority = null)
     {
         var removedHeaders = GetHopByHopHeaders(lines);
+
+        if (targetAuthority is not null)
+        {
+            // RFC 9112, section 3.2.2. Replace the supplied Host with the request URI authority.
+            removedHeaders.Add("Host");
+        }
+
         var header = new StringBuilder();
 
         header.Append(lines[0]).Append("\r\n");
+
+        if (targetAuthority is not null)
+        {
+            header.Append($"Host: {targetAuthority}\r\n");
+        }
 
         foreach (var line in lines.Skip(1))
         {
