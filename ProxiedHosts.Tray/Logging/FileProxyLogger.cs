@@ -16,16 +16,18 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using ProxiedHosts.Core.Infrastructure;
+using ProxiedHosts.Core.Logging;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
-using ProxiedHosts.Core.Configuration;
-using ProxiedHosts.Core.Logging;
 
 namespace ProxiedHosts.Tray.Logging;
 
 internal sealed class FileProxyLogger : IProxyLogger
 {
+    private const string LogFileName = "proxiedhosts";
+
     private const long MaxLogSizeBytes = 10L * 1024 * 1024;
     private const int MaxArchives = 3;
 
@@ -40,15 +42,15 @@ internal sealed class FileProxyLogger : IProxyLogger
 
     public FileProxyLogger()
     {
-        _directory = Path.GetDirectoryName(ProxyConfiguration.Instance.HostsFilePath)!;
-        FilePath = Path.Combine(_directory, "proxiedhosts.log");
+        _directory = ApplicationPaths.GetDataDirectory();
+        FilePath = Path.Combine(_directory, $"{LogFileName}.log");
 
         try
         {
             PruneArchives();
 
             // Remove incomplete ZIP files left by an interrupted rotation.
-            foreach (var path in Directory.EnumerateFiles(_directory, "proxiedhosts-*.zip.tmp"))
+            foreach (var path in Directory.EnumerateFiles(_directory, $"{LogFileName}-*.zip.tmp"))
             {
                 File.Delete(path);
             }
@@ -104,7 +106,7 @@ internal sealed class FileProxyLogger : IProxyLogger
     private void Rotate()
     {
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff'Z'", CultureInfo.InvariantCulture);
-        var archiveName = $"proxiedhosts-{timestamp}";
+        var archiveName = $"{LogFileName}-{timestamp}";
         var archivePath = Path.Combine(_directory, $"{archiveName}.zip");
 
         // Avoid overwriting an archive if timestamps collide.
@@ -122,7 +124,7 @@ internal sealed class FileProxyLogger : IProxyLogger
             // Create the archive under a temporary name first.
             using (var archive = ZipFile.Open(temporaryPath, ZipArchiveMode.Create))
             {
-                archive.CreateEntryFromFile(FilePath, "proxiedhosts.log", CompressionLevel.Optimal);
+                archive.CreateEntryFromFile(FilePath, $"{LogFileName}.log", CompressionLevel.Optimal);
             }
 
             // Publish only a completed ZIP.
@@ -148,7 +150,7 @@ internal sealed class FileProxyLogger : IProxyLogger
     private void PruneArchives()
     {
         var oldArchives = Directory
-            .EnumerateFiles(_directory, "proxiedhosts-*.zip")
+            .EnumerateFiles(_directory, $"{LogFileName}-*.zip")
             .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
             .Skip(MaxArchives);
 

@@ -16,8 +16,8 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using ProxiedHosts.Core.Configuration;
 using System.Text.Json;
+using ProxiedHosts.Core.Infrastructure;
 
 namespace ProxiedHosts.Tray.Configuration;
 
@@ -26,16 +26,6 @@ namespace ProxiedHosts.Tray.Configuration;
 /// </summary>
 internal sealed class TraySettings
 {
-    private static string SettingsPath
-    {
-        get
-        {
-            var directory = Path.GetDirectoryName(ProxyConfiguration.Instance.HostsFilePath)!;
-
-            return Path.Combine(directory, "tray-settings.json");
-        }
-    }
-
     public bool IncludePreviewReleases { get; private set; }
 
     public bool MappingsActive { get; private set; } = true;
@@ -79,6 +69,8 @@ internal sealed class TraySettings
 
         return settings;
     }
+
+    private static string SettingsPath => Path.Combine(ApplicationPaths.GetDataDirectory(), "tray-settings.json");
 
     private static void CleanupTemporarySettings(string settingsPath)
     {

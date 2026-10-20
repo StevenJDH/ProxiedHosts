@@ -18,10 +18,8 @@
 
 namespace ProxiedHosts.Core.Infrastructure;
 
-internal static class ApplicationPaths
+public static class ApplicationPaths
 {
-    public const string DataDirectoryName = "ProxiedHosts";
-
     public static string GetDataDirectory()
     {
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -31,7 +29,7 @@ internal static class ApplicationPaths
             throw new InvalidOperationException("Could not determine the application data directory.");
         }
 
-        var directory = Path.Combine(root, DataDirectoryName);
+        var directory = Path.Combine(root, ApplicationMetadata.Instance.Product);
 
         Directory.CreateDirectory(directory);
 
