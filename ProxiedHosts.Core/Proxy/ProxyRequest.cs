@@ -16,6 +16,7 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System.Globalization;
 using System.Text;
 
 namespace ProxiedHosts.Core.Proxy;
@@ -81,7 +82,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         request = default!;
         error = null;
 
-        if (!TryParseHostPort(target, 443, out var host, out var port))
+        if (!TryParseConnectTarget(target, out var host, out var port))
         {
             error = "Invalid CONNECT target.";
             return false;
@@ -90,6 +91,49 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         request = new ProxyRequest(method, host, port, true, null);
 
         return true;
+    }
+
+    /// <summary>
+    /// Validates and parses an HTTP CONNECT target in accordance with
+    /// RFC 9110, Section 9.3.6, which requires an explicit destination port.
+    /// Unlike standard HTTP requests, CONNECT targets must not use a default port.
+    /// </summary>
+    /// <remarks>
+    /// Ensures the target contains a valid port and authority without
+    /// user information, paths, queries, or fragments, while supporting
+    /// both hostnames and bracketed IPv6 addresses.
+    /// See https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.6.
+    /// </remarks>
+    /// <param name="target">The CONNECT request target to validate.</param>
+    /// <param name="host">The parsed destination hostname or IP address.</param>
+    /// <param name="port">The explicitly specified destination port.</param>
+    /// <returns>
+    /// <see langword="true"/> if the target is valid; otherwise,
+    /// <see langword="false"/>.
+    /// </returns>
+    private static bool TryParseConnectTarget(string target, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+
+        var separator = target.LastIndexOf(':');
+
+        if (separator <= 0 || !int.TryParse(target.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var explicitPort)
+            || explicitPort is < 1 or > 65535)
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate($"tcp://{target}", UriKind.Absolute, out var uri) || uri.Port != explicitPort || !string.IsNullOrEmpty(uri.UserInfo)
+            || uri.AbsolutePath is not ("" or "/") || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+        {
+            return false;
+        }
+
+        host = uri.Host;
+        port = explicitPort;
+
+        return !string.IsNullOrWhiteSpace(host);
     }
 
     private static bool TryParseAbsoluteRequest(string method, string target, out ProxyRequest request)
