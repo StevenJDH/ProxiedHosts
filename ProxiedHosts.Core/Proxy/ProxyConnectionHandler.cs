@@ -399,6 +399,9 @@ public sealed class ProxyConnectionHandler
             {
                 var headerLength = headerEnd + 4;
 
+                // Reject complete headers whose terminator appears beyond the limit.
+                ValidateResponseHeaderLength(headerLength);
+
                 if (IsInterimResponse(buffered.AsSpan(0, headerLength)))
                 {
                     // Forward 1xx responses unchanged and wait for the final response.
@@ -421,6 +424,7 @@ public sealed class ProxyConnectionHandler
 
             var maxHeaderBytes = ProxyConfiguration.Instance.MaxHeaderBytes;
 
+            // Reject headers that reach the limit without a terminator.
             if (buffered.Length >= maxHeaderBytes)
             {
                 throw new IOException($"HTTP response header exceeded the {maxHeaderBytes}-byte limit.");
@@ -448,6 +452,26 @@ public sealed class ProxyConnectionHandler
         }
     }
 
+    /// <summary>
+    /// Validates that a completed HTTP response header does not exceed the
+    /// configured size limit, excluding any response body data.
+    /// </summary>
+    /// <param name="headerLength">
+    /// The total header length in bytes, including the terminating CRLF sequence.
+    /// </param>
+    /// <exception cref="IOException">
+    /// Thrown when the header length exceeds the configured maximum.
+    /// </exception>
+    private static void ValidateResponseHeaderLength(int headerLength)
+    {
+        var maxHeaderBytes = ProxyConfiguration.Instance.MaxHeaderBytes;
+
+        if (headerLength > maxHeaderBytes)
+        {
+            throw new IOException($"HTTP response header exceeded the {maxHeaderBytes}-byte limit.");
+        }
+    }
+    
     private static bool IsInterimResponse(ReadOnlySpan<byte> response)
     {
         var lineEnd = response.IndexOf("\r\n"u8);
@@ -647,6 +671,7 @@ public sealed class ProxyConnectionHandler
                      </main>
                  </body>
                  </html>
+                 
                  """;
 
         var body = Encoding.UTF8.GetBytes(html);

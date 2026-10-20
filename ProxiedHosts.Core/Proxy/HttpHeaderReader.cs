@@ -37,7 +37,7 @@ internal static class HttpHeaderReader
                 return HandleConnectionClosed(output);
             }
 
-            if (ProcessBuffer(buffer.AsSpan(0, read), output, ref matched))
+            if (ProcessBuffer(buffer.AsSpan(0, read), output, ref matched, maxBytes))
             {
                 return output.ToArray();
             }
@@ -46,7 +46,7 @@ internal static class HttpHeaderReader
         throw new IOException($"HTTP header exceeded the {maxBytes}-byte limit.");
     }
 
-    private static bool ProcessBuffer(ReadOnlySpan<byte> buffer, MemoryStream output, ref int matched)
+    private static bool ProcessBuffer(ReadOnlySpan<byte> buffer, MemoryStream output, ref int matched, int maxBytes)
     {
         for (var i = 0; i < buffer.Length; i++)
         {
@@ -54,12 +54,18 @@ internal static class HttpHeaderReader
 
             output.WriteByte(value);
 
+            if (output.Length > maxBytes)
+            {
+                throw new IOException($"HTTP header exceeded the {maxBytes}-byte limit.");
+            }
+
             if (value == HeaderTerminator[matched])
             {
                 matched++;
 
                 if (matched == HeaderTerminator.Length)
                 {
+                    // Preserve any body data received alongside the headers.
                     output.Write(buffer[(i + 1)..]);
                     return true;
                 }
