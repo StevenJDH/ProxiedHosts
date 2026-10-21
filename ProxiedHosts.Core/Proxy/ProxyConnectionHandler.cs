@@ -403,12 +403,7 @@ public sealed class ProxyConnectionHandler
                 ValidateResponseHeaderLength(headerLength);
 
                 // Reject ambiguous upstream framing before forwarding the response.
-                if (HttpMessageFraming.HasConflictingLengthHeaders(buffered.AsSpan(0, headerLength)))
-                {
-                    await WriteErrorAsync(destination, 502, "Bad Gateway", "The upstream server sent conflicting HTTP framing headers.", cancellationToken);
-
-                    throw new IOException("Upstream response contains both Content-Length and Transfer-Encoding.");
-                }
+                await ValidateResponseFramingAsync(buffered.AsMemory(0, headerLength), destination, cancellationToken);
 
                 if (IsInterimResponse(buffered.AsSpan(0, headerLength)))
                 {
@@ -478,6 +473,32 @@ public sealed class ProxyConnectionHandler
         {
             throw new IOException($"HTTP response header exceeded the {maxHeaderBytes}-byte limit.");
         }
+    }
+
+    /// <summary>
+    /// Validates HTTP response framing to prevent ambiguous message boundaries
+    /// caused by conflicting Content-Length and Transfer-Encoding headers.
+    /// </summary>
+    /// <remarks>
+    /// Rejects conflicting upstream responses with HTTP 502 before forwarding
+    /// their headers, in accordance with RFC 9112, Section 6.3.
+    /// </remarks>
+    /// <param name="header">The complete HTTP response header to validate.</param>
+    /// <param name="destination">The client stream receiving the error response.</param>
+    /// <param name="cancellationToken">The cancellation token for the operation.</param>
+    /// <exception cref="IOException">
+    /// Thrown when conflicting framing headers are detected.
+    /// </exception>
+    private static async Task ValidateResponseFramingAsync(ReadOnlyMemory<byte> header, Stream destination, CancellationToken cancellationToken)
+    {
+        if (!HttpMessageFraming.HasConflictingLengthHeaders(header.Span))
+        {
+            return;
+        }
+
+        await WriteErrorAsync(destination, 502, "Bad Gateway", "The upstream server sent conflicting HTTP framing headers.", cancellationToken);
+
+        throw new IOException("Upstream response contains both Content-Length and Transfer-Encoding.");
     }
     
     private static bool IsInterimResponse(ReadOnlySpan<byte> response)
