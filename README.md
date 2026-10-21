@@ -84,6 +84,7 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 * Prevents incorrect HTTP connection reuse by enforcing `Connection: close` on requests and responses.
 * Preserves tunnel data received alongside `CONNECT` headers to prevent data loss.
 * Supports TCP half-close to allow remaining traffic to finish when one direction closes.
+* Compliant with `RFC 9110`, `RFC 9112`, and the newer `RFC 9931` where applicable.
 
 ## Compatibility
 Below is a list of supported platforms for each tool variant.
@@ -191,7 +192,8 @@ curl http://example.com \
 ...
     </main>
 </body>
-</html>* shutting down connection #0
+</html>
+* shutting down connection #0
 ```
 
 The above output demonstrates two important features. One, the part that says `Could not connect to example.com:80` means that the entry provided early was used, in this case, to block traffic to `example.com`. And two, the part of the response that says `Connection: close` is a feature specific for HTTP traffic that removes headers like `Proxy-Connection: keep-alive` and `Connection: keep-alive` after being provided in the request to prevent connection reuse and ensure requests reach their intended destinations.
@@ -255,7 +257,7 @@ The following command-line flags enable additional connection logging in both th
 | Flag                | Description                                                         |
 |---------------------|---------------------------------------------------------------------|
 | `--log-all`         | Logs all proxied connection destinations, including unmapped hosts. |
-| `--log-diagnostics` | Enables detailed HTTPS tunnel diagnostics, including connection establishment, duration, disconnections, and errors. Automatically enables `--log-all` behavior. |
+| `--log-diagnostics` | Enables detailed HTTPS tunnel diagnostics, including connection lifecycle events, data transfer statistics, timing, disconnections, errors, etc. Automatically enables `--log-all` behavior. |
 
 Example usage:
 
@@ -266,7 +268,27 @@ proxiedhosts-tray.exe --log-diagnostics
 
 Without either flag, the application only logs mapped requests. Flags apply only to the current session. Fully exit the application before relaunching with different flags, or to launch without them to restore normal logging.
 
-Diagnostic logging records connection details without decrypting or inspecting HTTPS traffic.
+Diagnostic logging records connection metadata, relay activity, and transfer statistics without decrypting or inspecting HTTPS traffic.
+
+### Diagnostic information
+
+When `--log-diagnostics` is enabled, additional connection diagnostics are recorded for both HTTP requests and HTTPS CONNECT tunnels. Detailed tunnel lifecycle events and transfer statistics are specific to HTTPS CONNECT connections.
+
+| Diagnostic                   | HTTP | HTTPS CONNECT | Description |
+|------------------------------|:----:|:-------------:|-------------|
+| Connection ID                | Errors only | Yes    | Unique identifier assigned to each connection, allowing related diagnostic entries to be correlated. |
+| Requested destination        | Yes  | Yes           | Original hostname and port requested by the client. |
+| Routing method               | Yes  | Yes           | Indicates whether the destination uses a custom host mapping or normal DNS resolution. |
+| Tunnel establishment         | No   | Yes           | Confirms when an HTTPS CONNECT tunnel has been successfully established. |
+| Upstream connection failures | No   | Yes           | Records failed connection attempts, including exception details and relevant socket error codes. |
+| Relay direction              | No   | Yes           | Identifies traffic flowing from client to upstream or upstream to client, including which direction completed first. |
+| Relay outcome                | No   | Yes           | Reports `EOF`, `Canceled`, `Error`, or `Incomplete` for each direction to help identify how data transfer ended. |
+| Relay completion time        | No   | Yes           | Elapsed time until each relay direction completes. |
+| Tunnel duration              | No   | Yes           | Total elapsed time from relay startup until tunnel closure. |
+| Upstream endpoint            | No   | Yes           | Actual remote IP address and port of the established upstream connection, when available. |
+| Bytes transferred            | No   | Yes           | Total successfully forwarded bytes in each direction, helping identify asymmetric or stalled traffic. |
+| Time since last relay write  | No   | Yes           | Time elapsed since data was last successfully forwarded, or an indication that no relay payload was forwarded. |
+| Connection disconnections    | Yes  | Yes           | Records expected I/O, socket, and disposal exceptions, including their type and message, to help diagnose unexpected disconnects. |
 
 ## Limitations
 Below is a list of intentional limitations that may or may not be needed in most or all cases.
