@@ -38,10 +38,9 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
             return false;
         }
         
-        // RFC 9112, Section 6.3: Reject ambiguous HTTP message framing.
-        if (HttpMessageFraming.HasConflictingLengthHeaders(rawHeader))
+        // RFC 9112, Section 6.3: Reject invalid or ambiguous HTTP message framing.
+        if (!HttpMessageFraming.TryValidate(rawHeader, out error))
         {
-            error = "Conflicting Content-Length and Transfer-Encoding headers.";
             return false;
         }
 

@@ -480,29 +480,29 @@ public sealed class ProxyConnectionHandler
     }
 
     /// <summary>
-    /// Validates HTTP response framing to prevent ambiguous message boundaries
-    /// caused by conflicting Content-Length and Transfer-Encoding headers.
+    /// Validates HTTP response framing to prevent invalid or ambiguous
+    /// message boundaries.
     /// </summary>
     /// <remarks>
-    /// Rejects conflicting upstream responses with HTTP 502 before forwarding
-    /// their headers, in accordance with RFC 9112, Section 6.3.
+    /// Rejects invalid upstream framing with HTTP 502 before forwarding
+    /// the response, in accordance with RFC 9112, Section 6.3.
     /// </remarks>
     /// <param name="header">The complete HTTP response header to validate.</param>
     /// <param name="destination">The client stream receiving the error response.</param>
     /// <param name="cancellationToken">The cancellation token for the operation.</param>
     /// <exception cref="IOException">
-    /// Thrown when conflicting framing headers are detected.
+    /// Thrown when invalid or conflicting framing headers are detected.
     /// </exception>
     private static async Task ValidateResponseFramingAsync(ReadOnlyMemory<byte> header, Stream destination, CancellationToken cancellationToken)
     {
-        if (!HttpMessageFraming.HasConflictingLengthHeaders(header.Span))
+        if (HttpMessageFraming.TryValidate(header.Span, out var error))
         {
             return;
         }
 
-        await WriteErrorAsync(destination, 502, "Bad Gateway", "The upstream server sent conflicting HTTP framing headers.", cancellationToken);
+        await WriteErrorAsync(destination, 502, "Bad Gateway", "The upstream server sent invalid HTTP framing headers.", cancellationToken);
 
-        throw new IOException("Upstream response contains both Content-Length and Transfer-Encoding.");
+        throw new IOException($"Invalid upstream HTTP response framing: {error}");
     }
     
     private static bool IsInterimResponse(ReadOnlySpan<byte> response)

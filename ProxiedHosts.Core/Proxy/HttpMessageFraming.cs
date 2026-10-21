@@ -16,17 +16,27 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using System.Globalization;
 using System.Text;
 
 namespace ProxiedHosts.Core.Proxy;
 
 /// <summary>
-/// Detects conflicting HTTP message framing headers to prevent
-/// ambiguous message boundaries and potential request smuggling.
+/// Validates HTTP message framing headers to prevent ambiguous message
+/// boundaries and potential request smuggling or response splitting.
 /// </summary>
 internal static class HttpMessageFraming
 {
-    public static bool HasConflictingLengthHeaders(ReadOnlySpan<byte> rawMessage)
+    /// <summary>
+    /// Validates HTTP message framing in accordance with RFC 9112, Section 6.3.
+    /// </summary>
+    /// <param name="rawMessage">The HTTP message containing complete headers.</param>
+    /// <param name="error">The validation error, if any.</param>
+    /// <returns>
+    /// <see langword="true"/> if framing is valid; otherwise,
+    /// <see langword="false"/>.
+    /// </returns>
+    public static bool TryValidate(ReadOnlySpan<byte> rawMessage, out string? error)
     {
         var headerEnd = rawMessage.IndexOf("\r\n\r\n"u8);
 
@@ -39,6 +49,27 @@ internal static class HttpMessageFraming
             .GetString(rawMessage[..headerEnd])
             .Split("\r\n", StringSplitOptions.None);
 
+        if (!TryValidateConflictingLengthHeaders(lines, out error))
+        {
+            return false;
+        }
+
+        return TryValidateContentLength(lines, out error);
+    }
+
+    /// <summary>
+    /// Rejects messages containing both Content-Length and Transfer-Encoding
+    /// headers to prevent ambiguous HTTP message framing.
+    /// </summary>
+    /// <param name="lines">The HTTP header lines.</param>
+    /// <param name="error">The validation error, if any.</param>
+    /// <returns>
+    /// <see langword="true"/> if no conflict exists; otherwise,
+    /// <see langword="false"/>.
+    /// </returns>
+    private static bool TryValidateConflictingLengthHeaders(string[] lines, out string? error)
+    {
+        error = null;
         var hasContentLength = false;
         var hasTransferEncoding = false;
 
@@ -64,10 +95,70 @@ internal static class HttpMessageFraming
 
             if (hasContentLength && hasTransferEncoding)
             {
-                return true;
+                error = "Conflicting Content-Length and Transfer-Encoding headers.";
+                return false;
             }
         }
 
-        return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Rejects invalid, duplicate, or overflowing Content-Length headers.
+    /// </summary>
+    /// <param name="lines">The HTTP header lines.</param>
+    /// <param name="error">The validation error, if any.</param>
+    /// <returns>
+    /// <see langword="true"/> if Content-Length is valid or absent;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
+    private static bool TryValidateContentLength(string[] lines, out string? error)
+    {
+        error = null;
+        var hasContentLength = false;
+
+        foreach (var line in lines.Skip(1))
+        {
+            var separator = line.IndexOf(':');
+
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            var originalName = line[..separator];
+            var name = originalName.Trim(' ', '\t');
+
+            if (!name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (hasContentLength || !IsValidContentLength(originalName, line[(separator + 1)..]))
+            {
+                error = "Invalid or duplicate Content-Length header.";
+                return false;
+            }
+
+            hasContentLength = true;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Validates that Content-Length contains a non-negative decimal integer
+    /// representable as a 64-bit signed value.
+    /// </summary>
+    /// <param name="name">The original header field name.</param>
+    /// <param name="value">The header field value.</param>
+    /// <returns>
+    /// <see langword="true"/> if the header is valid; otherwise,
+    /// <see langword="false"/>.
+    /// </returns>
+    private static bool IsValidContentLength(string name, string value)
+    {
+        return name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)
+            && long.TryParse(value.Trim(' ', '\t'), NumberStyles.None, CultureInfo.InvariantCulture, out _);
     }
 }
