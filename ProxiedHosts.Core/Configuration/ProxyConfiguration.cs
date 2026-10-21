@@ -53,6 +53,16 @@ public sealed record ProxyConfiguration(string ApplicationName, IPAddress Listen
 
     public TimeSpan MappingReloadDelay { get; init; } = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>
+    /// Controls whether the proxy adds its Via header to forwarded HTTP
+    /// requests and responses, as required by RFC 9110, Section 7.6.3.
+    /// </summary>
+    /// <remarks>
+    /// Enabled by default for standards compliance. Disabling it provides
+    /// a compatibility workaround for servers that reject proxy-identifying headers.
+    /// </remarks>
+    public bool EnableViaHeader { get; init; } = true;
+
     private static ProxyConfiguration Load()
     {
         var directory = ApplicationPaths.GetDataDirectory();

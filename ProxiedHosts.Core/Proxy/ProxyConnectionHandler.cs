@@ -407,8 +407,12 @@ public sealed class ProxyConnectionHandler
 
                 if (IsInterimResponse(buffered.AsSpan(0, headerLength)))
                 {
-                    // Forward 1xx responses unchanged and wait for the final response.
-                    await destination.WriteAsync(buffered.AsMemory(0, headerLength), cancellationToken);
+                    // Add Via to 1xx informational responses without closing the connection,
+                    // then continue waiting for the final response.
+                    var interimHeader = buffered[..headerLength];
+                    var rewrittenInterim = HttpHeaderRewriter.RewriteResponse(interimHeader, isInterim: true);
+
+                    await destination.WriteAsync(rewrittenInterim, cancellationToken);
                     idleCancellation.CancelAfter(idleTimeout);
                     buffered = buffered[headerLength..];
                     continue;

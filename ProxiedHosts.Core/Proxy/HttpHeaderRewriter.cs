@@ -17,12 +17,15 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+using ProxiedHosts.Core.Configuration;
 using System.Text;
 
 namespace ProxiedHosts.Core.Proxy;
 
 internal static class HttpHeaderRewriter
 {
+    private const string ViaPseudonym = "proxiedhosts";
+
     public static byte[] RewriteRequest(byte[] rawHeader, ProxyRequest request)
     {
         var (lines, bodyStart) = SplitHeader(rawHeader);
@@ -43,11 +46,11 @@ internal static class HttpHeaderRewriter
         return Rewrite(rawHeader, lines, bodyStart, uri.Authority);
     }
 
-    public static byte[] RewriteResponse(byte[] rawHeader)
+    public static byte[] RewriteResponse(byte[] rawHeader, bool isInterim = false)
     {
         var (lines, bodyStart) = SplitHeader(rawHeader);
 
-        return Rewrite(rawHeader, lines, bodyStart);
+        return Rewrite(rawHeader, lines, bodyStart, isInterim: isInterim);
     }
 
     private static (string[] Lines, int BodyStart) SplitHeader(byte[] rawHeader)
@@ -66,7 +69,7 @@ internal static class HttpHeaderRewriter
         return (lines, headerEnd + 4);
     }
 
-    private static byte[] Rewrite(byte[] rawHeader, string[] lines, int bodyStart, string? targetAuthority = null)
+    private static byte[] Rewrite(byte[] rawHeader, string[] lines, int bodyStart, string? targetAuthority = null, bool isInterim = false)
     {
         var removedHeaders = GetHopByHopHeaders(lines);
 
@@ -96,8 +99,19 @@ internal static class HttpHeaderRewriter
 
             header.Append(line).Append("\r\n");
         }
+        
+        // RFC 9110, Section 7.6.3: Append this proxy's Via entry when enabled.
+        if (ProxyConfiguration.Instance.EnableViaHeader)
+        {
+            header.Append($"Via: {GetReceivedProtocol(lines[0])} {ViaPseudonym}\r\n");
+        }
+        
+        if (!isInterim)
+        {
+            header.Append("Connection: close\r\n");
+        }
 
-        header.Append("Connection: close\r\n\r\n");
+        header.Append("\r\n");
 
         var rewrittenHeader = Encoding.Latin1.GetBytes(header.ToString());
         var result = new byte[rewrittenHeader.Length + rawHeader.Length - bodyStart];
@@ -108,6 +122,28 @@ internal static class HttpHeaderRewriter
         return result;
     }
 
+    private static string GetReceivedProtocol(string startLine)
+    {
+        var parts = startLine.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+        var version = string.Empty;
+
+        if (startLine.StartsWith("HTTP/", StringComparison.OrdinalIgnoreCase))
+        {
+            version = parts[0];
+        }
+        else if (parts.Length == 3)
+        {
+            version = parts[2];
+        }
+
+        if (!version.StartsWith("HTTP/", StringComparison.OrdinalIgnoreCase) || version.Length <= 5)
+        {
+            throw new IOException("Invalid HTTP protocol version.");
+        }
+
+        return version[5..];
+    }
+    
     private static HashSet<string> GetHopByHopHeaders(string[] lines)
     {
         var removed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
