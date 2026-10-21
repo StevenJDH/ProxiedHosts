@@ -402,6 +402,14 @@ public sealed class ProxyConnectionHandler
                 // Reject complete headers whose terminator appears beyond the limit.
                 ValidateResponseHeaderLength(headerLength);
 
+                // Reject ambiguous upstream framing before forwarding the response.
+                if (HttpMessageFraming.HasConflictingLengthHeaders(buffered.AsSpan(0, headerLength)))
+                {
+                    await WriteErrorAsync(destination, 502, "Bad Gateway", "The upstream server sent conflicting HTTP framing headers.", cancellationToken);
+
+                    throw new IOException("Upstream response contains both Content-Length and Transfer-Encoding.");
+                }
+
                 if (IsInterimResponse(buffered.AsSpan(0, headerLength)))
                 {
                     // Forward 1xx responses unchanged and wait for the final response.
