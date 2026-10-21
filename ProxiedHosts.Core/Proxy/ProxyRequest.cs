@@ -38,6 +38,14 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
             return false;
         }
 
+        // RFC 9112, Section 3.2: Validate Host before routing.
+        var requireHost = lines[0].EndsWith(" HTTP/1.1", StringComparison.Ordinal);
+
+        if (!TryReadHostHeader(lines, requireHost, out var hostValue, out error))
+        {
+            return false;
+        }
+
         if (method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase))
         {
             return TryParseConnectRequest(method, target, out request, out error);
@@ -48,7 +56,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
             return true;
         }
 
-        return TryParseHostHeaderRequest(lines, method, out request, out error);
+        return TryParseHostHeaderRequest(hostValue, method, out request, out error);
     }
 
     private static bool TryParseRequestLine(string[] lines, out string method, out string target, out string? error)
@@ -73,6 +81,57 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
 
         method = requestParts[0];
         target = requestParts[1];
+
+        return true;
+    }
+
+    private static bool TryReadHostHeader(string[] lines, bool required, out string? hostValue, out string? error)
+    {
+        hostValue = null;
+        error = null;
+
+        foreach (var line in lines.Skip(1))
+        {
+            var separator = line.IndexOf(':');
+
+            if (separator < 0)
+            {
+                continue;
+            }
+
+            var name = line[..separator];
+
+            if (!name.TrimEnd(' ', '\t').Equals("Host", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (hostValue is not null)
+            {
+                error = "Multiple Host headers.";
+                return false;
+            }
+
+            if (!name.Equals("Host", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "Invalid Host header.";
+                return false;
+            }
+
+            hostValue = line[(separator + 1)..].Trim(' ', '\t');
+        }
+
+        if (hostValue is null)
+        {
+            error = required ? "Missing Host header." : null;
+            return !required;
+        }
+
+        if (!TryParseHostPort(hostValue, 80, out _, out _))
+        {
+            error = "Invalid Host header.";
+            return false;
+        }
 
         return true;
     }
@@ -157,22 +216,16 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         return true;
     }
 
-    private static bool TryParseHostHeaderRequest(string[] lines, string method, out ProxyRequest request, out string? error)
+    private static bool TryParseHostHeaderRequest(string? hostValue, string method, out ProxyRequest request, out string? error)
     {
         request = default!;
         error = null;
 
-        var hostHeader = lines
-            .Skip(1)
-            .FirstOrDefault(line => line.StartsWith("Host:", StringComparison.OrdinalIgnoreCase));
-
-        if (hostHeader is null)
+        if (hostValue is null)
         {
             error = "Missing Host header.";
             return false;
         }
-
-        var hostValue = hostHeader[5..].Trim();
 
         if (!TryParseHostPort(hostValue, 80, out var host, out var port))
         {
@@ -184,7 +237,7 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
 
         return true;
     }
-
+    
     private static bool IsSupportedScheme(string scheme)
     {
         return scheme.Equals("http", StringComparison.OrdinalIgnoreCase) || scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
@@ -205,13 +258,19 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         host = string.Empty;
         port = defaultPort;
 
-        if (Uri.TryCreate($"tcp://{value}", UriKind.Absolute, out var uri))
+        if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsWhiteSpace) || value.IndexOfAny(['/', '\\', '?', '#', '@']) >= 0)
         {
-            host = uri.Host;
-            port = uri.IsDefaultPort ? defaultPort : uri.Port;
-            return !string.IsNullOrWhiteSpace(host) && port is > 0 and <= 65535;
+            return false;
         }
 
-        return false;
+        if (!Uri.TryCreate($"tcp://{value}", UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        host = uri.Host;
+        port = uri.IsDefaultPort ? defaultPort : uri.Port;
+
+        return !string.IsNullOrWhiteSpace(host) && port is > 0 and <= 65535;
     }
 }
