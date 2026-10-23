@@ -22,23 +22,14 @@ namespace ProxiedHosts.Console.Logging;
 
 internal sealed class ConsoleProxyLogger : IProxyLogger
 {
-    public void Debug(string message)
-    {
-        System.Console.WriteLine($"[{DateTimeOffset.Now:T}] {message}");
-    }
+    public void Debug(string message) => Write("DEBUG", message);
 
-    public void Information(string message)
-    {
-        System.Console.WriteLine($"[{DateTimeOffset.Now:T}] {message}");
-    }
+    public void Information(string message) => Write("INFO", message);
 
-    public void Warning(string message)
-    {
-        System.Console.Error.WriteLine($"[{DateTimeOffset.Now:T}] {message}");
-    }
+    public void Warning(string message) => Write("WARN", message);
 
-    public void Error(string message)
-    {
-        System.Console.Error.WriteLine($"[{DateTimeOffset.Now:T}] {message}");
-    }
+    public void Error(string message) => Write("ERROR", message);
+
+    // Using human-readable timestamp based on ISO 8601, which uses a space instead of the 'T' separator like when setting the 's' format specifier.
+    private void Write(string level, string message) => System.Console.Error.WriteLine($"[{DateTimeOffset.Now:MM/dd/yyyy HH:mm:ss}] [{level,-5}] {message}");
 }
