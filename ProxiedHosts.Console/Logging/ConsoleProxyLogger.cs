@@ -31,5 +31,5 @@ internal sealed class ConsoleProxyLogger : IProxyLogger
     public void Error(string message) => Write("ERROR", message);
 
     // Using human-readable timestamp based on ISO 8601, which uses a space instead of the 'T' separator like when setting the 's' format specifier.
-    private void Write(string level, string message) => System.Console.Error.WriteLine($"[{DateTimeOffset.Now:MM/dd/yyyy HH:mm:ss}] [{level,-5}] {message}");
+    private static void Write(string level, string message) => System.Console.Error.WriteLine($"[{DateTimeOffset.Now:MM/dd/yyyy HH:mm:ss}] [{level,-5}] {message}");
 }
