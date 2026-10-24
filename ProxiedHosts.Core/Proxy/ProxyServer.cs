@@ -25,6 +25,8 @@ namespace ProxiedHosts.Core.Proxy;
 
 public sealed class ProxyServer
 {
+    private const int MaxConcurrentRejections = 8;
+
     private readonly TcpListener _listener;
     private readonly ProxyConnectionHandler _connectionHandler;
 
@@ -47,6 +49,8 @@ public sealed class ProxyServer
             ? new SemaphoreSlim(maxConnections.Value, maxConnections.Value)
             : null;
 
+        using var rejectionSlots = new SemaphoreSlim(MaxConcurrentRejections, MaxConcurrentRejections);
+
         using var clientShutdown = new CancellationTokenSource();
         var activeClients = new ConcurrentDictionary<TcpClient, Task>();
 
@@ -56,8 +60,8 @@ public sealed class ProxyServer
 
             // Explicitly stop the listener when cancellation is requested. This is
             // important because it guarantees that a pending AcceptTcpClientAsync
-            // is unblocked immediately on Ctrl+C. Also, it is used for stopping to
-            // accept new connections when shutdown is requested.
+            // is unblocked immediately. Also, it is used for stopping to accept new
+            // connections when shutdown is requested.
             await using var cancellationRegistration = cancellationToken.Register(() =>
             {
                 try
@@ -71,19 +75,19 @@ public sealed class ProxyServer
             });
 
             // ReSharper disable once PossiblyMistakenUseOfCancellationToken
-            await AcceptClientsAsync(activeClients, connectionSlots, clientShutdown, cancellationToken);
+            await AcceptClientsAsync(activeClients, connectionSlots, rejectionSlots, clientShutdown, cancellationToken);
         }
         finally
         {
             _listener.Stop();
 
-            // Allow active connections to finish before returning.
+            // Drain both admitted connections and pending rejection responses.
             await DrainClientsAsync(activeClients, clientShutdown);
         }
     }
-
+    
     private async Task AcceptClientsAsync(ConcurrentDictionary<TcpClient, Task> activeClients, SemaphoreSlim? connectionSlots,
-        CancellationTokenSource clientShutdown, CancellationToken cancellationToken)
+        SemaphoreSlim rejectionSlots, CancellationTokenSource clientShutdown, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -107,10 +111,22 @@ public sealed class ProxyServer
                 break;
             }
 
-            // Reject excess connections without waiting for a slot.
-            if (connectionSlots is not null && !await connectionSlots.WaitAsync(0, cancellationToken))
+            bool slotAcquired;
+
+            try
             {
-                await RejectExcessConnectionAsync(client, cancellationToken);
+                slotAcquired = connectionSlots is null || await connectionSlots.WaitAsync(0, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                client.Dispose();
+                break;
+            }
+
+            // Reject excess connections without waiting for normal capacity.
+            if (!slotAcquired)
+            {
+                await ScheduleRejectionAsync(activeClients, client, rejectionSlots, clientShutdown.Token);
                 continue;
             }
 
@@ -119,19 +135,77 @@ public sealed class ProxyServer
                 ? _connectionHandler.HandleClientSafelyAsync(client, clientShutdown.Token)
                 : HandleClientWithSlotAsync(client, connectionSlots, clientShutdown.Token);
 
-            activeClients[client] = task;
+            TrackClientTask(activeClients, client, task);
+        }
+    }
+    
+    /// <summary>
+    /// Schedules a bounded HTTP 503 response or closes the connection
+    /// immediately when all rejection slots are occupied.
+    /// </summary>
+    /// <param name="activeClients">The dictionary tracking active connection tasks.</param>
+    /// <param name="client">The connection being rejected.</param>
+    /// <param name="rejectionSlots">The semaphore limiting concurrent rejections.</param>
+    /// <param name="cancellationToken">The cancellation token for the rejection.</param>
+    private static async Task ScheduleRejectionAsync(ConcurrentDictionary<TcpClient, Task> activeClients, TcpClient client,
+        SemaphoreSlim rejectionSlots, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!await rejectionSlots.WaitAsync(0, cancellationToken))
+            {
+                client.Dispose();
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            client.Dispose();
+            return;
+        }
 
-            // Remove completed tasks so tracking does not grow indefinitely.
-            _ = task.ContinueWith(completed =>
+        var task = RejectWithSlotAsync(client, rejectionSlots, cancellationToken);
+        TrackClientTask(activeClients, client, task);
+    }
+
+    /// <summary>
+    /// Sends a rejection response and releases its concurrency slot
+    /// when processing finishes.
+    /// </summary>
+    /// <param name="client">The connection being rejected.</param>
+    /// <param name="rejectionSlots">The semaphore controlling rejection concurrency.</param>
+    /// <param name="cancellationToken">The cancellation token for the operation.</param>
+    private static async Task RejectWithSlotAsync(TcpClient client, SemaphoreSlim rejectionSlots, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RejectExcessConnectionAsync(client, cancellationToken);
+        }
+        finally
+        {
+            rejectionSlots.Release();
+        }
+    }
+
+    /// <summary>
+    /// Tracks a connection task and removes it when processing completes.
+    /// </summary>
+    /// <param name="activeClients">The dictionary tracking connection tasks.</param>
+    /// <param name="client">The client associated with the task.</param>
+    /// <param name="task">The connection processing task.</param>
+    private static void TrackClientTask(ConcurrentDictionary<TcpClient, Task> activeClients, TcpClient client, Task task)
+    {
+        activeClients[client] = task;
+
+        _ = task.ContinueWith(completed =>
             {
                 activeClients.TryRemove(client, out _);
 
                 // Observe any unexpected exception from the task itself.
                 _ = completed.Exception;
             }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-        }
     }
-    
+
     /// <summary>
     /// Processes an admitted client connection and releases its concurrency
     /// slot when processing finishes, including when an error occurs.
