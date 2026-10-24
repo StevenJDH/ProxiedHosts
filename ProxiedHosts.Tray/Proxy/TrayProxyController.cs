@@ -26,10 +26,8 @@ namespace ProxiedHosts.Tray.Proxy;
 
 internal sealed class TrayProxyController
 {
-    private readonly ConnectionLogMode _logMode;
     private readonly IProxyLogger _logger;
-    private readonly bool _enableDiagnostics;
-    private readonly bool? _viaHeaderOverride;
+    private readonly ProxyStartupOptions _startupOptions;
 
     private CancellationTokenSource? _shutdown;
     private HostMappingProvider? _hostMappings;
@@ -52,12 +50,10 @@ internal sealed class TrayProxyController
 
     public string ProxyAddress => _configuration is null ? string.Empty : $"http://{_configuration.ListenAddress}:{Port}";
 
-    public TrayProxyController(ConnectionLogMode logMode, IProxyLogger logger, bool enableDiagnostics = false, bool? viaHeaderOverride = null)
+    public TrayProxyController(IProxyLogger logger, ProxyStartupOptions startupOptions)
     {
-        _logMode = logMode;
         _logger = logger;
-        _enableDiagnostics = enableDiagnostics;
-        _viaHeaderOverride = viaHeaderOverride;
+        _startupOptions = startupOptions;
     }
 
     public async Task StartAsync(bool mappingsActive = true)
@@ -86,11 +82,11 @@ internal sealed class TrayProxyController
                 _proxyState.Toggle();
             }
 
-            _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _logMode, _logger, _enableDiagnostics, _viaHeaderOverride);
+            _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _logger, _startupOptions);
             _hostMappings.MappingsReloaded += OnMappingsReloaded;
             _proxyState.Changed += OnProxyStateChanged;
 
-            var proxyServer = new ProxyServer(_configuration.ListenAddress, Port, _connectionHandler);
+            var proxyServer = new ProxyServer(_configuration.ListenAddress, Port, _connectionHandler, _startupOptions);
 
             _runTask = proxyServer.RunAsync(_shutdown.Token);
 

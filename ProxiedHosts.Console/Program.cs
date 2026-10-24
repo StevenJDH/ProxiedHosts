@@ -57,16 +57,14 @@ internal static class Program
             }
 
             var configuration = ProxyConfiguration.Instance;
-            var diagnostics = args.Contains("--log-diagnostics", StringComparer.OrdinalIgnoreCase);
-            var logMode = diagnostics || args.Contains("--log-all", StringComparer.OrdinalIgnoreCase) ? ConnectionLogMode.All : configuration.ConnectionLogMode;
-            bool? viaHeaderOverride = args.Contains("--no-via", StringComparer.OrdinalIgnoreCase) ? false : null;
+            var startupOptions = ProxyStartupOptions.Parse(args);
             var currentVersion = ApplicationMetadata.Instance.Version;
             using var hostMappings = new HostMappingProvider(configuration.HostsFilePath, logger);
             var portProvider = new PortProvider();
             var port = await portProvider.GetOrCreateAvailablePortAsync(shutdown.Token);
             var proxyState = new ProxyState();
-            var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, logMode, logger, diagnostics, viaHeaderOverride);
-            var proxy = new ProxyServer(configuration.ListenAddress, port, connectionHandler);
+            var connectionHandler = new ProxyConnectionHandler(hostMappings, proxyState, logger, startupOptions);
+            var proxy = new ProxyServer(configuration.ListenAddress, port, connectionHandler, startupOptions);
 
             hostMappings.MappingsReloaded += connectionHandler.DisconnectChangedConnections;
 

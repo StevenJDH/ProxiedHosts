@@ -259,6 +259,7 @@ The following command-line flags enable additional connection logging and overri
 | `--log-all`         | Logs all proxied connection destinations, including unmapped hosts. |
 | `--log-diagnostics` | Enables detailed HTTPS tunnel diagnostics, including connection lifecycle events, data transfer statistics, timing, disconnections, errors, etc. Automatically enables `--log-all` behavior. |
 | `--no-via`          | Disables adding the proxy's `Via` header to forwarded HTTP requests and responses for compatibility. |
+| `--max-connections` | Overrides the maximum number of concurrent proxy connections for the current session. Use with a positive integer to set a limit or with `unlimited` to disable it. |
 
 Example usage:
 
@@ -267,6 +268,8 @@ proxiedhosts.exe --log-all
 proxiedhosts-tray.exe --log-diagnostics
 proxiedhosts-tray.exe --no-via
 proxiedhosts.exe --no-via --log-diagnostics
+proxiedhosts.exe --max-connections 1000
+proxiedhosts-tray.exe --max-connections unlimited
 ```
 
 Without either logging flag, the application only logs mapped requests. The `Via` header is enabled by default unless `--no-via` is specified. Flags apply only to the current session. Fully exit the application before relaunching with different flags, or without them to restore normal behavior.

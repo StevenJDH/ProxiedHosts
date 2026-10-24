@@ -30,7 +30,6 @@ using ProxiedHosts.Tray.Logging;
 using ProxiedHosts.Tray.Proxy;
 using System.Text.Json;
 using ProxiedHosts.Core.Configuration;
-using ProxiedHosts.Core.Proxy;
 
 namespace ProxiedHosts.Tray;
 
@@ -84,20 +83,24 @@ public sealed class App : Application
                 _logger.Warning($"Failed to load tray settings: {ex.Message}");
             }
 
+            ProxyStartupOptions startupOptions;
+
+            try
+            {
+                startupOptions = ProxyStartupOptions.Parse(desktop.Args);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.Error($"Invalid command-line options: {ex.Message}");
+
+                Dispatcher.UIThread.Post(() => desktop.Shutdown(1));
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
 
             CreateTrayIcon();
 
-            var diagnostics = desktop.Args?.Contains("--log-diagnostics", StringComparer.OrdinalIgnoreCase) == true;
-            
-            var logMode = diagnostics || desktop.Args?.Contains("--log-all", StringComparer.OrdinalIgnoreCase) == true
-                ? ConnectionLogMode.All
-                : ProxyConfiguration.Instance.ConnectionLogMode;
-
-            bool? viaHeaderOverride = desktop.Args?.Contains("--no-via", StringComparer.OrdinalIgnoreCase) == true
-                ? false
-                : null;
-
-            _controller = new TrayProxyController(logMode, _logger, diagnostics, viaHeaderOverride);
+            _controller = new TrayProxyController(_logger, startupOptions);
             _controller.Changed += OnControllerChanged;
 
             Dispatcher.UIThread.Post(() => BeginProxyStart());

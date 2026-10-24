@@ -27,18 +27,22 @@ public sealed class ProxyServer
 {
     private const int MaxConcurrentRejections = 8;
 
+    private readonly ProxyStartupOptions _startupOptions;
     private readonly TcpListener _listener;
     private readonly ProxyConnectionHandler _connectionHandler;
 
-    public ProxyServer(IPAddress address, int port, ProxyConnectionHandler connectionHandler)
+    public ProxyServer(IPAddress address, int port, ProxyConnectionHandler connectionHandler, ProxyStartupOptions? startupOptions = null)
     {
         _listener = new TcpListener(address, port);
         _connectionHandler = connectionHandler;
+        _startupOptions = startupOptions ?? new ProxyStartupOptions();
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        var maxConnections = ProxyConfiguration.Instance.MaxConcurrentConnections;
+        var maxConnections = _startupOptions.MaxConcurrentConnectionsOverride is { } limitOverride
+            ? limitOverride.Value
+            : ProxyConfiguration.Instance.MaxConcurrentConnections;
 
         if (maxConnections is <= 0)
         {

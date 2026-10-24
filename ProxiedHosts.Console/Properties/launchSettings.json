@@ -11,6 +11,14 @@
       "commandName": "Project",
       "commandLineArgs": "--no-via"
     },
+    "Max 1 Connection": {
+      "commandName": "Project",
+      "commandLineArgs": "--max-connections 1"
+    },
+    "Unlimited Connections": {
+      "commandName": "Project",
+      "commandLineArgs": "--max-connections unlimited"
+    },
     "WSL": {
       "commandName": "WSL2",
       "distributionName": ""

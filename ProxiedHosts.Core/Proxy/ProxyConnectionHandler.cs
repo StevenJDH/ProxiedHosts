@@ -53,15 +53,16 @@ public sealed class ProxyConnectionHandler
 
     private readonly ConcurrentDictionary<TcpClient, ActiveConnection> _activeConnections = new();
 
-    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly,
-        IProxyLogger? logger = null, bool enableDiagnostics = false, bool? viaHeaderOverride = null)
+    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, IProxyLogger? logger = null, ProxyStartupOptions? startupOptions = null)
     {
+        startupOptions ??= new ProxyStartupOptions();
+
         _hostMappings = hostMappings;
         _proxyState = proxyState;
-        _logMode = logMode;
         _logger = logger ?? NullProxyLogger.Instance;
-        _enableDiagnostics = enableDiagnostics;
-        _enableViaHeader = viaHeaderOverride ?? ProxyConfiguration.Instance.EnableViaHeader;
+        _logMode = startupOptions.LogModeOverride ?? ProxyConfiguration.Instance.ConnectionLogMode;
+        _enableDiagnostics = startupOptions.EnableDiagnostics;
+        _enableViaHeader = startupOptions.ViaHeaderOverride ?? ProxyConfiguration.Instance.EnableViaHeader;
     }
 
     public async Task HandleClientSafelyAsync(TcpClient client, CancellationToken cancellationToken)

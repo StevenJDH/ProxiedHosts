@@ -10,6 +10,14 @@
     "No Via Mode": {
       "commandName": "Project",
       "commandLineArgs": "--no-via"
+    },
+    "Max 1 Connection": {
+      "commandName": "Project",
+      "commandLineArgs": "--max-connections 1"
+    },
+    "Unlimited Connections": {
+      "commandName": "Project",
+      "commandLineArgs": "--max-connections unlimited"
     }
   }
 }
