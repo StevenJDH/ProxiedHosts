@@ -29,6 +29,7 @@ internal sealed class TrayProxyController
     private readonly ConnectionLogMode _logMode;
     private readonly IProxyLogger _logger;
     private readonly bool _enableDiagnostics;
+    private readonly bool? _viaHeaderOverride;
 
     private CancellationTokenSource? _shutdown;
     private HostMappingProvider? _hostMappings;
@@ -51,11 +52,12 @@ internal sealed class TrayProxyController
 
     public string ProxyAddress => _configuration is null ? string.Empty : $"http://{_configuration.ListenAddress}:{Port}";
 
-    public TrayProxyController(ConnectionLogMode logMode, IProxyLogger logger, bool enableDiagnostics = false)
+    public TrayProxyController(ConnectionLogMode logMode, IProxyLogger logger, bool enableDiagnostics = false, bool? viaHeaderOverride = null)
     {
         _logMode = logMode;
         _logger = logger;
         _enableDiagnostics = enableDiagnostics;
+        _viaHeaderOverride = viaHeaderOverride;
     }
 
     public async Task StartAsync(bool mappingsActive = true)
@@ -84,7 +86,7 @@ internal sealed class TrayProxyController
                 _proxyState.Toggle();
             }
 
-            _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _logMode, _logger, _enableDiagnostics);
+            _connectionHandler = new ProxyConnectionHandler(_hostMappings, _proxyState, _logMode, _logger, _enableDiagnostics, _viaHeaderOverride);
             _hostMappings.MappingsReloaded += OnMappingsReloaded;
             _proxyState.Changed += OnProxyStateChanged;
 

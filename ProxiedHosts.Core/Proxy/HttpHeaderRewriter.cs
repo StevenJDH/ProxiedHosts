@@ -17,7 +17,6 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using ProxiedHosts.Core.Configuration;
 using System.Text;
 
 namespace ProxiedHosts.Core.Proxy;
@@ -26,13 +25,13 @@ internal static class HttpHeaderRewriter
 {
     private const string ViaPseudonym = "proxiedhosts";
 
-    public static byte[] RewriteRequest(byte[] rawHeader, ProxyRequest request)
+    public static byte[] RewriteRequest(byte[] rawHeader, ProxyRequest request, bool enableViaHeader)
     {
         var (lines, bodyStart) = SplitHeader(rawHeader);
 
         if (request.AbsoluteUri is null || !Uri.TryCreate(request.AbsoluteUri, UriKind.Absolute, out var uri))
         {
-            return Rewrite(rawHeader, lines, bodyStart);
+            return Rewrite(rawHeader, lines, bodyStart, enableViaHeader);
         }
 
         var parts = lines[0].Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
@@ -43,14 +42,14 @@ internal static class HttpHeaderRewriter
             lines[0] = $"{parts[0]} {pathAndQuery} {parts[2]}";
         }
 
-        return Rewrite(rawHeader, lines, bodyStart, uri.Authority);
+        return Rewrite(rawHeader, lines, bodyStart, enableViaHeader, uri.Authority);
     }
 
-    public static byte[] RewriteResponse(byte[] rawHeader, bool isInterim = false)
+    public static byte[] RewriteResponse(byte[] rawHeader, bool enableViaHeader, bool isInterim = false)
     {
         var (lines, bodyStart) = SplitHeader(rawHeader);
 
-        return Rewrite(rawHeader, lines, bodyStart, isInterim: isInterim);
+        return Rewrite(rawHeader, lines, bodyStart, enableViaHeader, isInterim: isInterim);
     }
 
     private static (string[] Lines, int BodyStart) SplitHeader(byte[] rawHeader)
@@ -69,7 +68,7 @@ internal static class HttpHeaderRewriter
         return (lines, headerEnd + 4);
     }
 
-    private static byte[] Rewrite(byte[] rawHeader, string[] lines, int bodyStart, string? targetAuthority = null, bool isInterim = false)
+    private static byte[] Rewrite(byte[] rawHeader, string[] lines, int bodyStart, bool enableViaHeader, string? targetAuthority = null, bool isInterim = false)
     {
         var removedHeaders = GetHopByHopHeaders(lines);
 
@@ -101,7 +100,7 @@ internal static class HttpHeaderRewriter
         }
         
         // RFC 9110, Section 7.6.3: Append this proxy's Via entry when enabled.
-        if (ProxyConfiguration.Instance.EnableViaHeader)
+        if (enableViaHeader)
         {
             header.Append($"Via: {GetReceivedProtocol(lines[0])} {ViaPseudonym}\r\n");
         }

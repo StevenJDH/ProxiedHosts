@@ -1,11 +1,15 @@
 {
   "profiles": {
-    "ProxiedHosts.Tray": {
+    "Normal Mode": {
       "commandName": "Project"
     },
-    "ProxiedHosts.Tray Diagnostics": {
+    "Diagnostics Mode": {
       "commandName": "Project",
       "commandLineArgs": "--log-diagnostics"
+    },
+    "No Via Mode": {
+      "commandName": "Project",
+      "commandLineArgs": "--no-via"
     }
   }
 }

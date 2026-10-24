@@ -1,11 +1,19 @@
 {
   "profiles": {
-    "ProxiedHosts.Console": {
+    "Normal Mode": {
       "commandName": "Project"
     },
-    "ProxiedHosts.Console Diagnostics": {
+    "Diagnostics Mode": {
       "commandName": "Project",
       "commandLineArgs": "--log-diagnostics"
+    },
+    "No Via Mode": {
+      "commandName": "Project",
+      "commandLineArgs": "--no-via"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
     }
   }
 }

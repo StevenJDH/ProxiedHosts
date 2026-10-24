@@ -254,9 +254,9 @@ internal sealed record ProxyRequest(string Method, string Host, int Port, bool I
         return scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? 443 : 80;
     }
 
-    public static byte[] RewriteForOriginServer(byte[] rawHeader, ProxyRequest request)
+    public static byte[] RewriteForOriginServer(byte[] rawHeader, ProxyRequest request, bool enableViaHeader)
     {
-        return HttpHeaderRewriter.RewriteRequest(rawHeader, request);
+        return HttpHeaderRewriter.RewriteRequest(rawHeader, request, enableViaHeader);
     }
 
     private static bool TryParseHostPort(string value, int defaultPort, out string host, out int port)

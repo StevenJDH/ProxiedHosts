@@ -48,17 +48,20 @@ public sealed class ProxyConnectionHandler
     private readonly ConnectionLogMode _logMode;
     private readonly IProxyLogger _logger;
     private readonly bool _enableDiagnostics;
+    private readonly bool _enableViaHeader;
     private long _nextConnectionId;
 
     private readonly ConcurrentDictionary<TcpClient, ActiveConnection> _activeConnections = new();
 
-    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly, IProxyLogger? logger = null, bool enableDiagnostics = false)
+    public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, ConnectionLogMode logMode = ConnectionLogMode.MappedOnly,
+        IProxyLogger? logger = null, bool enableDiagnostics = false, bool? viaHeaderOverride = null)
     {
         _hostMappings = hostMappings;
         _proxyState = proxyState;
         _logMode = logMode;
         _logger = logger ?? NullProxyLogger.Instance;
         _enableDiagnostics = enableDiagnostics;
+        _enableViaHeader = viaHeaderOverride ?? ProxyConfiguration.Instance.EnableViaHeader;
     }
 
     public async Task HandleClientSafelyAsync(TcpClient client, CancellationToken cancellationToken)
@@ -198,7 +201,7 @@ public sealed class ProxyConnectionHandler
         }
         else
         {
-            var rewrittenHeader = ProxyRequest.RewriteForOriginServer(requestHeader, request);
+            var rewrittenHeader = ProxyRequest.RewriteForOriginServer(requestHeader, request, _enableViaHeader);
 
             await upstreamStream.WriteAsync(rewrittenHeader, cancellationToken);
         }
@@ -362,7 +365,7 @@ public sealed class ProxyConnectionHandler
     /// See <see href="https://github.com/dotnet/runtime/issues/97050">
     /// .NET runtime issue #97050</see> for details.
     /// </remarks>
-    private static async Task PumpAndHalfCloseAsync(Stream source, Stream destination, Socket? destinationSocket, CancellationTokenSource idleCancellation,
+    private async Task PumpAndHalfCloseAsync(Stream source, Stream destination, Socket? destinationSocket, CancellationTokenSource idleCancellation,
         TimeSpan idleTimeout, Action<int>? recordForwardedBytes = null, bool rewriteResponse = false)
     {
         if (rewriteResponse)
@@ -385,7 +388,7 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private static async Task ForwardHttpResponseAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation, TimeSpan idleTimeout)
+    private async Task ForwardHttpResponseAsync(Stream source, Stream destination, CancellationTokenSource idleCancellation, TimeSpan idleTimeout)
     {
         var buffered = Array.Empty<byte>();
         var buffer = new byte[4096];
@@ -407,10 +410,10 @@ public sealed class ProxyConnectionHandler
 
                 if (IsInterimResponse(buffered.AsSpan(0, headerLength)))
                 {
-                    // Add Via to 1xx informational responses without closing the connection,
+                    // Conditionally add Via to 1xx informational responses without closing the connection,
                     // then continue waiting for the final response.
                     var interimHeader = buffered[..headerLength];
-                    var rewrittenInterim = HttpHeaderRewriter.RewriteResponse(interimHeader, isInterim: true);
+                    var rewrittenInterim = HttpHeaderRewriter.RewriteResponse(interimHeader, _enableViaHeader, isInterim: true);
 
                     await destination.WriteAsync(rewrittenInterim, cancellationToken);
                     idleCancellation.CancelAfter(idleTimeout);
@@ -418,7 +421,7 @@ public sealed class ProxyConnectionHandler
                     continue;
                 }
 
-                var rewritten = HttpHeaderRewriter.RewriteResponse(buffered);
+                var rewritten = HttpHeaderRewriter.RewriteResponse(buffered, _enableViaHeader);
 
                 await destination.WriteAsync(rewritten, cancellationToken);
                 idleCancellation.CancelAfter(idleTimeout);

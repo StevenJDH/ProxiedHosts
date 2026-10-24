@@ -88,11 +88,16 @@ public sealed class App : Application
             CreateTrayIcon();
 
             var diagnostics = desktop.Args?.Contains("--log-diagnostics", StringComparer.OrdinalIgnoreCase) == true;
+            
             var logMode = diagnostics || desktop.Args?.Contains("--log-all", StringComparer.OrdinalIgnoreCase) == true
                 ? ConnectionLogMode.All
                 : ProxyConfiguration.Instance.ConnectionLogMode;
 
-            _controller = new TrayProxyController(logMode, _logger, diagnostics);
+            bool? viaHeaderOverride = desktop.Args?.Contains("--no-via", StringComparer.OrdinalIgnoreCase) == true
+                ? false
+                : null;
+
+            _controller = new TrayProxyController(logMode, _logger, diagnostics, viaHeaderOverride);
             _controller.Changed += OnControllerChanged;
 
             Dispatcher.UIThread.Post(() => BeginProxyStart());

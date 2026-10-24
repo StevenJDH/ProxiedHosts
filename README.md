@@ -250,23 +250,26 @@ ProxiedHosts supports running at system login to maintain connectivity for appli
 > [!TIP]
 > Move the proxiedhosts-tray application to a permanent location before enabling startup at login. Likewise, before removing the application or changing its location, ensure to disable the startup first.
 
-## Connection logging
+## Connection logging and overriding proxy behavior
 
-The following command-line flags enable additional connection logging in both the console and tray applications for troubleshooting connectivity issues without modifying the default configuration.
+The following command-line flags enable additional connection logging and overriding proxy behavior in both the console and tray applications. These flags are useful for troubleshooting connectivity issues without modifying the default configuration.
 
 | Flag                | Description                                                         |
 |---------------------|---------------------------------------------------------------------|
 | `--log-all`         | Logs all proxied connection destinations, including unmapped hosts. |
 | `--log-diagnostics` | Enables detailed HTTPS tunnel diagnostics, including connection lifecycle events, data transfer statistics, timing, disconnections, errors, etc. Automatically enables `--log-all` behavior. |
+| `--no-via`          | Disables adding the proxy's `Via` header to forwarded HTTP requests and responses for compatibility. |
 
 Example usage:
 
 ```batch
 proxiedhosts.exe --log-all
 proxiedhosts-tray.exe --log-diagnostics
+proxiedhosts-tray.exe --no-via
+proxiedhosts.exe --no-via --log-diagnostics
 ```
 
-Without either flag, the application only logs mapped requests. Flags apply only to the current session. Fully exit the application before relaunching with different flags, or to launch without them to restore normal logging.
+Without either logging flag, the application only logs mapped requests. The `Via` header is enabled by default unless `--no-via` is specified. Flags apply only to the current session. Fully exit the application before relaunching with different flags, or without them to restore normal behavior.
 
 Diagnostic logging records connection metadata, relay activity, and transfer statistics without decrypting or inspecting HTTPS traffic.
 
