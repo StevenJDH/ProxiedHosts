@@ -53,6 +53,18 @@ public sealed record ProxyConfiguration(string ApplicationName, IPAddress Listen
     public TimeSpan MappingReloadDelay { get; init; } = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
+    /// Specifies the maximum number of concurrent client connections accepted
+    /// by the proxy.
+    /// </summary>
+    /// <remarks>
+    /// Each connection consumes a slot until its processing completes.
+    /// When the limit is reached, additional connections are rejected to
+    /// prevent unbounded resource consumption. Set to <see langword="null"/>
+    /// to disable the limit and allow unlimited concurrent connections.
+    /// </remarks>
+    public int? MaxConcurrentConnections { get; init; } = 256;
+
+    /// <summary>
     /// Controls whether the proxy adds its Via header to forwarded HTTP
     /// requests and responses, as required by RFC 9110, Section 7.6.3.
     /// </summary>

@@ -36,6 +36,17 @@ public sealed class ProxyServer
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        var maxConnections = ProxyConfiguration.Instance.MaxConcurrentConnections;
+
+        if (maxConnections is <= 0)
+        {
+            throw new InvalidOperationException($"{nameof(ProxyConfiguration.MaxConcurrentConnections)} must be positive or null.");
+        }
+
+        using var connectionSlots = maxConnections is not null
+            ? new SemaphoreSlim(maxConnections.Value, maxConnections.Value)
+            : null;
+
         using var clientShutdown = new CancellationTokenSource();
         var activeClients = new ConcurrentDictionary<TcpClient, Task>();
 
@@ -60,7 +71,7 @@ public sealed class ProxyServer
             });
 
             // ReSharper disable once PossiblyMistakenUseOfCancellationToken
-            await AcceptClientsAsync(activeClients, clientShutdown, cancellationToken);
+            await AcceptClientsAsync(activeClients, connectionSlots, clientShutdown, cancellationToken);
         }
         finally
         {
@@ -71,7 +82,8 @@ public sealed class ProxyServer
         }
     }
 
-    private async Task AcceptClientsAsync(ConcurrentDictionary<TcpClient, Task> activeClients, CancellationTokenSource clientShutdown, CancellationToken cancellationToken)
+    private async Task AcceptClientsAsync(ConcurrentDictionary<TcpClient, Task> activeClients, SemaphoreSlim? connectionSlots,
+        CancellationTokenSource clientShutdown, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -95,8 +107,17 @@ public sealed class ProxyServer
                 break;
             }
 
+            // Reject excess connections without waiting for a slot.
+            if (connectionSlots is not null && !await connectionSlots.WaitAsync(0, cancellationToken))
+            {
+                await RejectExcessConnectionAsync(client, cancellationToken);
+                continue;
+            }
+
             // Client connections have their own cancellation lifetime.
-            var task = _connectionHandler.HandleClientSafelyAsync(client, clientShutdown.Token);
+            var task = connectionSlots is null
+                ? _connectionHandler.HandleClientSafelyAsync(client, clientShutdown.Token)
+                : HandleClientWithSlotAsync(client, connectionSlots, clientShutdown.Token);
 
             activeClients[client] = task;
 
@@ -110,7 +131,54 @@ public sealed class ProxyServer
             }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
     }
+    
+    /// <summary>
+    /// Processes an admitted client connection and releases its concurrency
+    /// slot when processing finishes, including when an error occurs.
+    /// </summary>
+    /// <param name="client">The accepted client connection.</param>
+    /// <param name="connectionSlots">The semaphore controlling concurrency.</param>
+    /// <param name="cancellationToken">The cancellation token for the connection.</param>
+    private async Task HandleClientWithSlotAsync(TcpClient client, SemaphoreSlim connectionSlots, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _connectionHandler.HandleClientSafelyAsync(client, cancellationToken);
+        }
+        finally
+        {
+            connectionSlots.Release();
+        }
+    }
 
+    /// <summary>
+    /// Rejects a connection when the concurrency limit has been reached as per RFC 9110 §15.6.4,
+    /// attempting to return HTTP 503 before closing the socket.
+    /// </summary>
+    /// <param name="client">The connection to reject.</param>
+    /// <param name="cancellationToken">The cancellation token for the operation.</param>
+    private static async Task RejectExcessConnectionAsync(TcpClient client, CancellationToken cancellationToken)
+    {
+        using (client)
+        {
+            using var rejectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            rejectionCancellation.CancelAfter(TimeSpan.FromMilliseconds(250));
+
+            try
+            {
+                await ProxyErrorResponse.WriteAsync(client.GetStream(),
+                    503,
+                    "Service Unavailable",
+                    "The proxy has reached its maximum number of concurrent connections.",
+                    rejectionCancellation.Token);
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException)
+            {
+                // Best-effort error response. The connection is closed regardless.
+            }
+        }
+    }
+    
     private static async Task DrainClientsAsync(ConcurrentDictionary<TcpClient, Task> activeClients, CancellationTokenSource clientShutdown)
     {
         // No new clients can be accepted. Allow current ones to finish.
