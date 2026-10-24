@@ -71,7 +71,8 @@ internal sealed class FileProxyLogger : IProxyLogger
 
     private void Write(string level, string message)
     {
-        var entry = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz} {level} {message}{Environment.NewLine}";
+        // Using RFC 3339 timestamp.
+        var entry = $"{DateTimeOffset.UtcNow:yyyy-MM-dd'T'HH:mm:ss.fff'Z'} {level,-5} {message}{Environment.NewLine}";
 
         try
         {
