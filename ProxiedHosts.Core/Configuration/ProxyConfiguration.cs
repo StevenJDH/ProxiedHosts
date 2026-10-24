@@ -38,14 +38,13 @@ public sealed record ProxyConfiguration(string ApplicationName, IPAddress Listen
     /// Specifies the maximum period of inactivity allowed for HTTPS CONNECT tunnels.
     /// </summary>
     /// <remarks>
-    /// Applications such as Microsoft Teams may maintain long-lived connections for
-    /// notifications and other real-time communication, even when no data is being
-    /// transferred. A short idle timeout can prematurely close these connections,
-    /// causing temporary disconnections or interruptions until the application reconnects.
-    /// Use <see cref="TimeSpan.FromMinutes(long)"/> with a value of 60 for a more permissive
-    /// timeout (TimeSpan.FromMinutes(60)), or <see cref="Timeout.InfiniteTimeSpan"/>
-    /// to disable application-enforced idle timeouts entirely. When disabled, tunnels
-    /// remain open until an endpoint disconnects, an error occurs, or the proxy shuts down.
+    /// By default, no application-enforced idle timeout is applied, allowing
+    /// long-lived connections to remain open without requiring continuous traffic.
+    /// A finite timeout can be configured to close tunnels after a period without
+    /// successfully forwarded data in either direction, helping release inactive
+    /// connection resources. However, this may interrupt otherwise healthy idle
+    /// connections. Regardless of the configured timeout, tunnels remain open
+    /// until an endpoint disconnects, an error occurs, or the proxy shuts down.
     /// </remarks>
     public TimeSpan TunnelIdleTimeout { get; init; } = Timeout.InfiniteTimeSpan;
 
