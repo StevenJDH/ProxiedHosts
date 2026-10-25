@@ -69,6 +69,9 @@ internal static class Program
             hostMappings.MappingsReloaded += connectionHandler.DisconnectChangedConnections;
 
             using var cancelHandler = new ConsoleCancelHandler(shutdown, logger);
+            await using var statusServer = new ProxyStatusServer(proxy, connectionHandler, proxyState, hostMappings);
+            
+            statusServer.Start(shutdown.Token);
 
             proxyState.Changed += active =>
             {
@@ -81,6 +84,7 @@ internal static class Program
             SystemConsole.WriteLine("------------------");
             SystemConsole.WriteLine($"Proxy      : http://127.0.0.1:{port}");
             SystemConsole.WriteLine($"Port       : {port} (stable and persisted)");
+            SystemConsole.WriteLine($"Dashboard  : {statusServer.Url}");
             SystemConsole.WriteLine($"Mappings   : {hostMappings.Count}");
             SystemConsole.WriteLine($"Status     : {(proxyState.IsActive ? "Active" : "Inactive")}");
             SystemConsole.WriteLine();
@@ -90,6 +94,7 @@ internal static class Program
             SystemConsole.WriteLine("P = toggle proxy mappings");
             SystemConsole.WriteLine("O = open proxy settings...");
             SystemConsole.WriteLine("E = edit proxiedhosts.txt");
+            SystemConsole.WriteLine("S = open status dashboard");
             SystemConsole.WriteLine("U = check for updates");
             SystemConsole.WriteLine($"A = about {product}");
             SystemConsole.WriteLine("D = donate 5€ (PayPal)...");
@@ -106,7 +111,7 @@ internal static class Program
             try
             {
                 // Handle keyboard input without creating a detached background task.
-                RunInputLoop(proxyState, configuration.HostsFilePath, currentVersion, logger, shutdown, proxyTask);
+                RunInputLoop(proxyState, configuration.HostsFilePath, statusServer.Url, currentVersion, logger, shutdown, proxyTask);
                 await proxyTask;
             }
             finally
@@ -117,6 +122,9 @@ internal static class Program
                 }
             }
 
+            var totals = connectionHandler.Metrics.GetSnapshot();
+
+            logger.Information($"Connections: accepted={totals.TotalAccepted}, peak={totals.PeakConnections}, rejected={totals.TotalRejected}.");
             logger.Information("Proxy stopped.");
 
             return 0;
@@ -132,7 +140,7 @@ internal static class Program
         }
     }
 
-    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, Version currentVersion, IProxyLogger logger, CancellationTokenSource shutdown, Task proxyTask)
+    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, string statusUrl, Version currentVersion, IProxyLogger logger, CancellationTokenSource shutdown, Task proxyTask)
     {
         while (!shutdown.IsCancellationRequested && !proxyTask.IsCompleted)
         {
@@ -156,6 +164,10 @@ internal static class Program
 
                 case ConsoleKey.E:
                     TryOpen(() => FileLauncher.Open(hostsFilePath), "hosts file", logger);
+                    break;
+
+                case ConsoleKey.S:
+                    TryOpen(() => FileLauncher.OpenUrl(statusUrl), "proxy status dashboard", logger);
                     break;
 
                 case ConsoleKey.U:

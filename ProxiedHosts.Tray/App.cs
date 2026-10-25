@@ -55,6 +55,7 @@ public sealed class App : Application
     private NativeMenuItem? _previewReleasesItem;
     private UpdateDialog? _updateDialog;
     private NativeMenuItem? _openHostsItem;
+    private NativeMenuItem? _openStatusItem;
     private AboutDialog? _aboutDialog;
 
     private Task? _startTask;
@@ -173,6 +174,13 @@ public sealed class App : Application
             OpenLogFile();
         };
 
+        _openStatusItem = new NativeMenuItem("Open status dashboard")
+        {
+            IsEnabled = false
+        };
+
+        _openStatusItem.Click += (_, _) => OpenProxyStatus();
+
         var donationUrl = ApplicationMetadata.Instance.FixedDonationUrl;
 
         var donateItem = new NativeMenuItem("Donate 5€ (PayPal)...")
@@ -264,6 +272,7 @@ public sealed class App : Application
 
             _openHostsItem,
             openLogItem,
+            _openStatusItem,
 
             new NativeMenuItemSeparator(),
 
@@ -472,6 +481,7 @@ public sealed class App : Application
             _startProxyItem!.IsVisible = false;
             _mappingsItem!.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
+            _openStatusItem!.IsEnabled = false;
             _trayIcon!.ToolTipText = $"{product} - Starting";
 
             return;
@@ -485,6 +495,7 @@ public sealed class App : Application
             _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", _settings.MappingsActive);
             _mappingsItem.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
+            _openStatusItem!.IsEnabled = !string.IsNullOrEmpty(_controller.StatusUrl);
             _trayIcon!.ToolTipText = $"{product} - Failed";
 
             return;
@@ -499,6 +510,7 @@ public sealed class App : Application
         _mappingsItem!.Header = ToggleHeader($"Enable mappings ({mappingCount})", _controller.IsActive);
         _mappingsItem.IsEnabled = true;
         _openHostsItem!.IsEnabled = true;
+        _openStatusItem!.IsEnabled = !string.IsNullOrEmpty(_controller.StatusUrl);
         _trayIcon!.ToolTipText = _controller.IsActive ? $"{product} - Active ({mappingCount} mapping{s})" : $"{product} - Inactive";
     }
 
@@ -712,6 +724,25 @@ public sealed class App : Application
         catch (Exception ex)
         {
             _logger.Error($"Failed to open log file: {ex.Message}");
+        }
+    }
+
+    private void OpenProxyStatus()
+    {
+        var url = _controller?.StatusUrl;
+
+        if (string.IsNullOrEmpty(url))
+        {
+            return;
+        }
+
+        try
+        {
+            FileLauncher.OpenUrl(url);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to open proxy status dashboard: {ex.Message}");
         }
     }
 

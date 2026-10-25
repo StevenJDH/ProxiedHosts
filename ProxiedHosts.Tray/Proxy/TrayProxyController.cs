@@ -35,6 +35,9 @@ internal sealed class TrayProxyController
     private ProxyConnectionHandler? _connectionHandler;
     private ProxyConfiguration? _configuration;
     private Task? _runTask;
+    private ProxyStatusServer? _statusServer;
+
+    public string StatusUrl => _statusServer?.Url ?? string.Empty;
 
     public event Action? Changed;
 
@@ -88,6 +91,8 @@ internal sealed class TrayProxyController
 
             var proxyServer = new ProxyServer(_configuration.ListenAddress, Port, _connectionHandler, _startupOptions);
 
+            _statusServer = new ProxyStatusServer(proxyServer, _connectionHandler, _proxyState, _hostMappings);
+            _statusServer.Start(_shutdown.Token);
             _runTask = proxyServer.RunAsync(_shutdown.Token);
 
             // Detect an immediate startup failure, such as a port binding error.
@@ -183,25 +188,43 @@ internal sealed class TrayProxyController
                 {
                     // A faulted proxy task must not prevent resource cleanup.
                 }
+
+                if (_connectionHandler is not null)
+                {
+                    var snapshot = _connectionHandler.Metrics.GetSnapshot();
+
+                    _logger.Information($"Connections: accepted={snapshot.TotalAccepted}, peak={snapshot.PeakConnections}, rejected={snapshot.TotalRejected}.");
+                }
             }
         }
         finally
         {
             try
             {
-                _hostMappings?.Dispose();
+                if (_statusServer is not null)
+                {
+                    await _statusServer.DisposeAsync();
+                }
             }
-            finally
+            finally // Wrapping the resource cleanup in finally so the status listener is stopped before disposing _hostMappings and _shutdown.
             {
-                shutdown.Dispose();
+                try
+                {
+                    _hostMappings?.Dispose();
+                }
+                finally
+                {
+                    shutdown.Dispose();
+                    _statusServer = null;
 
-                _runTask = null;
-                _connectionHandler = null;
-                _proxyState = null;
-                _hostMappings = null;
-                _configuration = null;
-                _shutdown = null;
-                Port = 0;
+                    _runTask = null;
+                    _connectionHandler = null;
+                    _proxyState = null;
+                    _hostMappings = null;
+                    _configuration = null;
+                    _shutdown = null;
+                    Port = 0;
+                }
             }
         }
     }

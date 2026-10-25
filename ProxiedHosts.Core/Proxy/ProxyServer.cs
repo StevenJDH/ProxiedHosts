@@ -31,6 +31,18 @@ public sealed class ProxyServer
     private readonly TcpListener _listener;
     private readonly ProxyConnectionHandler _connectionHandler;
 
+    private int _isListening;
+
+    /// <summary>
+    /// Gets whether the proxy TCP listener is listening.
+    /// </summary>
+    public bool IsListening => Volatile.Read(ref _isListening) == 1;
+
+    /// <summary>
+    /// Gets the effective concurrent connection limit.
+    /// </summary>
+    public int? EffectiveMaxConcurrentConnections => _startupOptions.MaxConcurrentConnectionsOverride is { } limitOverride ? limitOverride.Value : ProxyConfiguration.Instance.MaxConcurrentConnections;
+
     public ProxyServer(IPAddress address, int port, ProxyConnectionHandler connectionHandler, ProxyStartupOptions? startupOptions = null)
     {
         _listener = new TcpListener(address, port);
@@ -40,9 +52,7 @@ public sealed class ProxyServer
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        var maxConnections = _startupOptions.MaxConcurrentConnectionsOverride is { } limitOverride
-            ? limitOverride.Value
-            : ProxyConfiguration.Instance.MaxConcurrentConnections;
+        var maxConnections = EffectiveMaxConcurrentConnections;
 
         if (maxConnections is <= 0)
         {
@@ -61,6 +71,8 @@ public sealed class ProxyServer
         try
         {
             _listener.Start();
+            Volatile.Write(ref _isListening, 1);
+
 
             // Explicitly stop the listener when cancellation is requested. This is
             // important because it guarantees that a pending AcceptTcpClientAsync
@@ -83,6 +95,7 @@ public sealed class ProxyServer
         }
         finally
         {
+            Volatile.Write(ref _isListening, 0);
             _listener.Stop();
 
             // Drain both admitted connections and pending rejection responses.
@@ -130,6 +143,7 @@ public sealed class ProxyServer
             // Reject excess connections without waiting for normal capacity.
             if (!slotAcquired)
             {
+                _connectionHandler.Metrics.RecordRejection();
                 await ScheduleRejectionAsync(activeClients, client, rejectionSlots, clientShutdown.Token);
                 continue;
             }

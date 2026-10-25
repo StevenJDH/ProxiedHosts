@@ -53,6 +53,11 @@ public sealed class ProxyConnectionHandler
 
     private readonly ConcurrentDictionary<TcpClient, ActiveConnection> _activeConnections = new();
 
+    /// <summary>
+    /// Gets the connection metrics for the current proxy session.
+    /// </summary>
+    public ProxyConnectionMetrics Metrics { get; } = new();
+
     public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, IProxyLogger? logger = null, ProxyStartupOptions? startupOptions = null)
     {
         startupOptions ??= new ProxyStartupOptions();
@@ -68,12 +73,13 @@ public sealed class ProxyConnectionHandler
     public async Task HandleClientSafelyAsync(TcpClient client, CancellationToken cancellationToken)
     {
         using (client)
+        using (var connectionActivity = Metrics.BeginConnection())
         {
             var connectionId = _enableDiagnostics ? Interlocked.Increment(ref _nextConnectionId) : 0;
 
             try
             {
-                await HandleClientAsync(client, connectionId, cancellationToken);
+                await HandleClientAsync(client, connectionId, connectionActivity, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -113,7 +119,7 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private async Task HandleClientAsync(TcpClient client, long connectionId, CancellationToken cancellationToken)
+    private async Task HandleClientAsync(TcpClient client, long connectionId, ProxyConnectionMetrics.ConnectionActivity connectionActivity, CancellationToken cancellationToken)
     {
         client.NoDelay = true;
 
@@ -144,6 +150,8 @@ public sealed class ProxyConnectionHandler
             await ProxyErrorResponse.WriteAsync(clientStream, 400, "Bad Request", parseError ?? "Invalid proxy request.", cancellationToken);
             return;
         }
+
+        connectionActivity.Classify(request.IsConnect);
 
         var route = ResolveRoute(request.Host, request.Port);
 

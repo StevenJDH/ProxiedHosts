@@ -33,14 +33,22 @@ public static class FileLauncher
     
     public static void OpenUrl(string url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
-            throw new ArgumentException("A valid HTTPS URL is required.", nameof(url));
+            throw new ArgumentException("A valid URL is required.", nameof(url));
+        }
+
+        var isHttps = uri.Scheme == Uri.UriSchemeHttps;
+        var isLocalHttp = uri.Scheme == Uri.UriSchemeHttp && uri.Host.Equals("127.0.0.1", StringComparison.Ordinal) && string.IsNullOrEmpty(uri.UserInfo);
+
+        if (!isHttps && !isLocalHttp)
+        {
+            throw new ArgumentException("A valid HTTPS URL or loopback HTTP URL is required.", nameof(url));
         }
 
         LaunchWithCooldown($"url:{uri.AbsoluteUri}", () => OpenUrlCore(uri));
     }
-
+    
     public static void OpenSystemProxySettings()
     {
         LaunchWithCooldown("settings:proxy", OpenSystemProxySettingsCore);
