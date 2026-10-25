@@ -76,6 +76,7 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
 * Disconnects only connections affected by mapping changes.
 * Binds exclusively to `127.0.0.1` for local access.
 * Generates a random port on first run and persists it for subsequent runs.
+* [Status dashboard](#status-dashboard) with connection statistics and other operational info.
 * Optionally starts the tray application at system login.
 * Automatic and manual update checking with option for preview releases.
 * Automatically closes idle connections without network activity.
