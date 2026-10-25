@@ -43,6 +43,13 @@ public sealed class ProxyServer
     /// </summary>
     public int? EffectiveMaxConcurrentConnections => _startupOptions.MaxConcurrentConnectionsOverride is { } limitOverride ? limitOverride.Value : ProxyConfiguration.Instance.MaxConcurrentConnections;
 
+    /// <summary>
+    /// Initializes the proxy listener and its optional runtime options.
+    /// </summary>
+    /// <param name="address">The address on which the proxy listens.</param>
+    /// <param name="port">The TCP port on which the proxy listens.</param>
+    /// <param name="connectionHandler">Processes accepted client connections.</param>
+    /// <param name="startupOptions">The proxy session's startup options.</param>
     public ProxyServer(IPAddress address, int port, ProxyConnectionHandler connectionHandler, ProxyStartupOptions? startupOptions = null)
     {
         _listener = new TcpListener(address, port);

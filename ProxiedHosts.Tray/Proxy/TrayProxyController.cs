@@ -21,6 +21,7 @@ using ProxiedHosts.Core.Hosts;
 using ProxiedHosts.Core.Infrastructure;
 using ProxiedHosts.Core.Logging;
 using ProxiedHosts.Core.Proxy;
+using ProxiedHosts.Core.Status;
 
 namespace ProxiedHosts.Tray.Proxy;
 
@@ -91,15 +92,18 @@ internal sealed class TrayProxyController
 
             var proxyServer = new ProxyServer(_configuration.ListenAddress, Port, _connectionHandler, _startupOptions);
 
-            _statusServer = new ProxyStatusServer(proxyServer, _connectionHandler, _proxyState, _hostMappings);
-            _statusServer.Start(_shutdown.Token);
+            // Start the normal proxy before binding the dashboard listener.
             _runTask = proxyServer.RunAsync(_shutdown.Token);
 
             // Detect an immediate startup failure, such as a port binding error.
             if (_runTask.IsCompleted)
             {
                 await _runTask;
+                throw new InvalidOperationException("Proxy server stopped unexpectedly during startup.");
             }
+
+            _statusServer = new ProxyStatusServer(proxyServer, _connectionHandler, _proxyState, _hostMappings, _logger);
+            _statusServer.Start(_shutdown.Token);
 
             Changed?.Invoke();
 

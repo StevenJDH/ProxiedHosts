@@ -58,6 +58,13 @@ public sealed class ProxyConnectionHandler
     /// </summary>
     public ProxyConnectionMetrics Metrics { get; } = new();
 
+    /// <summary>
+    /// Initializes the connection handler and its optional runtime options.
+    /// </summary>
+    /// <param name="hostMappings">Provides hostname-to-address mappings.</param>
+    /// <param name="proxyState">Controls whether custom mappings are active.</param>
+    /// <param name="logger">Receives connection logs, or null to disable logging.</param>
+    /// <param name="startupOptions">The proxy session's startup options.</param>
     public ProxyConnectionHandler(HostMappingProvider hostMappings, ProxyState proxyState, IProxyLogger? logger = null, ProxyStartupOptions? startupOptions = null)
     {
         startupOptions ??= new ProxyStartupOptions();

@@ -25,6 +25,7 @@ using System.Text;
 using System.Text.Json;
 using ProxiedHosts.Console.Infrastructure;
 using ProxiedHosts.Console.Logging;
+using ProxiedHosts.Core.Status;
 using SystemConsole = System.Console;
 
 namespace ProxiedHosts.Console;
@@ -69,9 +70,9 @@ internal static class Program
             hostMappings.MappingsReloaded += connectionHandler.DisconnectChangedConnections;
 
             using var cancelHandler = new ConsoleCancelHandler(shutdown, logger);
-            await using var statusServer = new ProxyStatusServer(proxy, connectionHandler, proxyState, hostMappings);
-            
-            statusServer.Start(shutdown.Token);
+            await using var statusServer = new ProxyStatusServer(proxy, connectionHandler, proxyState, hostMappings, logger);
+
+            statusServer.Start(shutdown.Token, excludedPort: port);
 
             proxyState.Changed += active =>
             {
@@ -110,8 +111,12 @@ internal static class Program
 
             try
             {
-                // Handle keyboard input without creating a detached background task.
-                RunInputLoop(proxyState, configuration.HostsFilePath, statusServer.Url, currentVersion, logger, shutdown, proxyTask);
+                if (!SystemConsole.IsInputRedirected)
+                {
+                    // Handle keyboard input without creating a detached background task.
+                    RunInputLoop(proxyState, configuration.HostsFilePath, statusServer.Url, currentVersion, logger, shutdown, proxyTask);
+                }
+                
                 await proxyTask;
             }
             finally

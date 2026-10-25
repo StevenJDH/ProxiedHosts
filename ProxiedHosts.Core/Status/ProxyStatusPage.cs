@@ -16,13 +16,13 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using ProxiedHosts.Core.Infrastructure;
 using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using ProxiedHosts.Core.Infrastructure;
 
-namespace ProxiedHosts.Core.Proxy;
+namespace ProxiedHosts.Core.Status;
 
 /// <summary>
 /// Writes a read-only HTML dashboard using the visual palette of proxy error pages.
@@ -163,9 +163,7 @@ internal static class ProxyStatusPage
                           .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
                           .auto-refresh { background: var(--surface); color: var(--muted); border-color: var(--border); }
                           .auto-refresh:hover, .auto-refresh:focus-visible { border-color: var(--teal); color: var(--teal); }
-                          .auto-refresh:hover, .auto-refresh:focus-visible { border-color: var(--teal); color: var(--teal); }
                           .product-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--subtle); font-size: 12px; }
-                          .footer-credits { margin: 0; line-height: 1.6; }
                           .repo-link { display: inline-flex; align-items: center; gap: 7px; color: var(--teal); font-size: 12px; font-weight: 400; text-decoration: none; }
                           .repo-link:hover, .repo-link:focus-visible { color: #91eddf; }
                           .repo-link:hover .repo-text, .repo-link:focus-visible .repo-text { text-decoration: underline; }

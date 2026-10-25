@@ -16,7 +16,9 @@
  * along with ProxiedHosts.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-namespace ProxiedHosts.Core.Proxy;
+using ProxiedHosts.Core.Proxy;
+
+namespace ProxiedHosts.Core.Status;
 
 /// <summary>
 /// Contains the values displayed by the local read-only status dashboard.

@@ -17,12 +17,14 @@
  */
 
 using ProxiedHosts.Core.Hosts;
+using ProxiedHosts.Core.Logging;
+using ProxiedHosts.Core.Proxy;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-namespace ProxiedHosts.Core.Proxy;
+namespace ProxiedHosts.Core.Status;
 
 /// <summary>
 /// Hosts the read-only proxy status page on a separate IPv4 loopback listener.
@@ -31,6 +33,7 @@ public sealed class ProxyStatusServer : IAsyncDisposable
 {
     private const int MaxConcurrentRequests = 4;
     private const int MaxRequestHeaderBytes = 4096;
+    private const int MaxPortSelectionAttempts = 10;
 
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
     private readonly SemaphoreSlim _requestSlots = new(MaxConcurrentRequests, MaxConcurrentRequests);
@@ -41,6 +44,7 @@ public sealed class ProxyStatusServer : IAsyncDisposable
     private readonly HostMappingProvider _hostMappings;
     private CancellationTokenSource? _shutdown;
     private Task? _runTask;
+    private bool _disposed;
 
     /// <summary>
     /// Gets the bound TCP port after <see cref="Start"/> succeeds.
@@ -52,6 +56,8 @@ public sealed class ProxyStatusServer : IAsyncDisposable
     /// </summary>
     public string Url => Port == 0 ? string.Empty : $"http://127.0.0.1:{Port}/status";
 
+    private readonly IProxyLogger _logger;
+
     /// <summary>
     /// Initializes the status listener with the services whose state is displayed.
     /// </summary>
@@ -59,29 +65,75 @@ public sealed class ProxyStatusServer : IAsyncDisposable
     /// <param name="handler">The proxy's connection handler and metrics owner.</param>
     /// <param name="proxyState">The host-mappings activation state.</param>
     /// <param name="hostMappings">The loaded host mappings.</param>
-    public ProxyStatusServer(ProxyServer proxy, ProxyConnectionHandler handler, ProxyState proxyState, HostMappingProvider hostMappings)
+    /// <param name="logger">Receives connection logs, or null to disable logging.</param>
+    public ProxyStatusServer(ProxyServer proxy, ProxyConnectionHandler handler, ProxyState proxyState, HostMappingProvider hostMappings, IProxyLogger? logger = null)
     {
         _proxy = proxy;
         _handler = handler;
         _proxyState = proxyState;
         _hostMappings = hostMappings;
+        _logger = logger ?? NullProxyLogger.Instance;
     }
 
     /// <summary>
-    /// Starts the status listener on an automatically assigned loopback port.
+    /// Starts the status listener on an automatically assigned loopback port,
+    /// excluding the specified port if provided.
     /// </summary>
     /// <param name="lifetimeToken">The application or proxy-session shutdown token.</param>
-    public void Start(CancellationToken lifetimeToken)
+    /// <param name="excludedPort">An existing proxy port that must not be selected.</param>
+    public void Start(CancellationToken lifetimeToken, int? excludedPort = null)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         if (_shutdown is not null)
         {
             throw new InvalidOperationException("The proxy status listener is already running.");
         }
 
-        _listener.Start(backlog: 16);
-        Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
-        _shutdown = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
-        _runTask = AcceptLoopAsync(_shutdown.Token);
+        for (var attempt = 0; attempt < MaxPortSelectionAttempts; attempt++)
+        {
+            _listener.Start(backlog: 16);
+
+            var selectedPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+            if (selectedPort == excludedPort)
+            {
+                _listener.Stop();
+                continue;
+            }
+
+            Port = selectedPort;
+            _shutdown = CancellationTokenSource.CreateLinkedTokenSource(lifetimeToken);
+            _runTask = RunMonitoredAsync(_shutdown.Token);
+            return;
+        }
+
+        throw new InvalidOperationException("Unable to select a dashboard port different from the proxy port.");
+    }
+    
+    /// <summary>
+    /// Runs the status listener and reports unexpected termination.
+    /// </summary>
+    /// <param name="cancellationToken">Stops the listener during shutdown.</param>
+    private async Task RunMonitoredAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await AcceptLoopAsync(cancellationToken);
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.Error("Proxy status listener stopped unexpectedly.");
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Normal shutdown.
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Proxy status listener failed: {ex.Message}");
+        }
     }
 
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
@@ -173,6 +225,10 @@ public sealed class ProxyStatusServer : IAsyncDisposable
             {
                 // Browsers may disconnect or time out while loading the status page.
             }
+            catch (Exception ex)
+            {
+                _logger.Error($"Proxy status request failed: {ex.Message}");
+            }
             finally
             {
                 _requestSlots.Release();
@@ -248,17 +304,25 @@ public sealed class ProxyStatusServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Stops the listener, closes pending dashboard connections, and drains its tasks.
+    /// Permanently stops the listener, closes dashboard connections,
+    /// and releases its resources.
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (_shutdown is null)
+        if (_disposed)
         {
             return;
         }
 
+        _disposed = true;
+
         try
         {
+            if (_shutdown is null)
+            {
+                return;
+            }
+
             await _shutdown.CancelAsync();
             _listener.Stop();
 
@@ -274,7 +338,7 @@ public sealed class ProxyStatusServer : IAsyncDisposable
         }
         finally
         {
-            _shutdown.Dispose();
+            _shutdown?.Dispose();
             _shutdown = null;
             _requestSlots.Dispose();
             Port = 0;
