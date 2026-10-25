@@ -19,6 +19,7 @@
 using ProxiedHosts.Core.Infrastructure;
 using System.Globalization;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace ProxiedHosts.Core.Proxy;
@@ -28,16 +29,20 @@ namespace ProxiedHosts.Core.Proxy;
 /// </summary>
 internal static class ProxyStatusPage
 {
+    private const string AutoRefreshScript = "setTimeout(() => location.reload(), 10000);";
+    private static readonly string AutoRefreshScriptHash = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(AutoRefreshScript)));
+
     /// <summary>
     /// Writes one HTTP 200 dashboard response from a consistent metrics snapshot.
     /// </summary>
     /// <param name="stream">The browser's connection stream.</param>
     /// <param name="snapshot">The values displayed by the dashboard.</param>
+    /// <param name="autoRefresh">Whether automatic dashboard refresh is enabled.</param>
     /// <param name="cancellationToken">Cancels slow reads or writes.</param>
-    public static async Task WriteAsync(Stream stream, ProxyStatusSnapshot snapshot, CancellationToken cancellationToken)
+    public static async Task WriteAsync(Stream stream, ProxyStatusSnapshot snapshot, bool autoRefresh, CancellationToken cancellationToken)
     {
-        var body = Encoding.UTF8.GetBytes(RenderHtml(snapshot));
-        
+        var body = Encoding.UTF8.GetBytes(RenderHtml(snapshot, autoRefresh));
+
         var sb = new StringBuilder()
             .Append("HTTP/1.1 200 OK\r\n")
             .Append("Content-Type: text/html; charset=utf-8\r\n")
@@ -47,7 +52,7 @@ internal static class ProxyStatusPage
             .Append("X-Frame-Options: DENY\r\n")
             .Append("Referrer-Policy: no-referrer\r\n")
             .Append("Cross-Origin-Resource-Policy: same-origin\r\n")
-            .Append("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n")
+            .Append($"Content-Security-Policy: default-src 'none'; script-src 'sha256-{AutoRefreshScriptHash}'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n")
             .Append("Connection: close\r\n\r\n");
 
         var headers = Encoding.ASCII.GetBytes(sb.ToString());
@@ -56,7 +61,7 @@ internal static class ProxyStatusPage
         await stream.WriteAsync(body, cancellationToken);
     }
 
-    private static string RenderHtml(ProxyStatusSnapshot snapshot)
+    private static string RenderHtml(ProxyStatusSnapshot snapshot, bool autoRefresh)
     {
         var metrics = snapshot.Connections;
         var metadata = ApplicationMetadata.Instance;
@@ -83,6 +88,12 @@ internal static class ProxyStatusPage
         var limit = snapshot.MaxConcurrentConnections?.ToString("N0", CultureInfo.InvariantCulture) ?? "Unlimited";
         var timestamp = snapshot.CapturedAt.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
 
+        // Using script approach instead of refresh directive for better compatibility with browsers like Firefox.
+        var refreshScript = autoRefresh ? $"<script>{AutoRefreshScript}</script>" : string.Empty;
+        var autoRefreshUrl = autoRefresh ? "/status" : "/status?refresh=10";
+        var manualRefreshUrl = autoRefresh ? "/status?refresh=10" : "/status";
+        var autoRefreshLabel = autoRefresh ? "Auto-refresh: On" : "Auto-refresh: Off";
+        
         return $$"""
                   <!doctype html>
                   <html lang="en">
@@ -91,6 +102,7 @@ internal static class ProxyStatusPage
                       <meta name="viewport" content="width=device-width, initial-scale=1">
                       <meta name="color-scheme" content="dark">
                       <title>Proxy Status | {{appName}}</title>
+                      {{refreshScript}}
                       <style>
                           :root {
                               color-scheme: dark;
@@ -144,10 +156,14 @@ internal static class ProxyStatusPage
                           .detail { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
                           .detail span:first-child { color: var(--muted); font-size: 14px; }
                           .detail span:last-child { font-weight: 700; font-size: 14px; }
-                          .refresh { display: inline-flex; align-items: center; gap: 7px; padding: 11px 17px; border-radius: 10px; background: var(--teal); color: #091c29; font-size: 12px; font-weight: 400; text-decoration: none; }
+                          .refresh, .auto-refresh { display: inline-flex; align-items: center; justify-content: center; width: 170px; min-height: 40px; padding: 10px 14px; border: 1px solid transparent; border-radius: 10px; font-size: 12px; font-weight: 400; line-height: 18px; text-decoration: none; white-space: nowrap; }
+                          .refresh { gap: 7px; background: var(--teal); color: #091c29; }
                           .refresh:hover, .refresh:focus-visible { background: #91eddf; }
                           .refresh svg, .repo-link svg { width: 15px; height: 15px; flex-shrink: 0; }
-                          .actions { display: flex; justify-content: flex-end; margin-top: 20px; }
+                          .actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+                          .auto-refresh { background: var(--surface); color: var(--muted); border-color: var(--border); }
+                          .auto-refresh:hover, .auto-refresh:focus-visible { border-color: var(--teal); color: var(--teal); }
+                          .auto-refresh:hover, .auto-refresh:focus-visible { border-color: var(--teal); color: var(--teal); }
                           .product-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--subtle); font-size: 12px; }
                           .footer-credits { margin: 0; line-height: 1.6; }
                           .repo-link { display: inline-flex; align-items: center; gap: 7px; color: var(--teal); font-size: 12px; font-weight: 400; text-decoration: none; }
@@ -197,7 +213,8 @@ internal static class ProxyStatusPage
                           </div>
                       </section>
                       <div class="actions">
-                          <a class="refresh" href="/status">
+                          <a class="auto-refresh" href="{{autoRefreshUrl}}">{{autoRefreshLabel}}</a>
+                          <a class="refresh" href="{{manualRefreshUrl}}">
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                   <path d="M3 12a9 9 0 0 1 15.36-6.36L21 8M21 3v5h-5"/>
                                   <path d="M21 12a9 9 0 0 1-15.36 6.36L3 16M3 21v-5h5"/>

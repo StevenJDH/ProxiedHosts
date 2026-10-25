@@ -193,7 +193,7 @@ public sealed class ProxyStatusServer : IAsyncDisposable
             return;
         }
 
-        if (!IsAllowedRequest(header))
+        if (!TryGetRefreshMode(header, out var autoRefresh))
         {
             await WriteNotFoundAsync(stream, requestCancellation.Token);
             return;
@@ -207,14 +207,16 @@ public sealed class ProxyStatusServer : IAsyncDisposable
             _proxy.EffectiveMaxConcurrentConnections,
             DateTimeOffset.UtcNow);
 
-        await ProxyStatusPage.WriteAsync(stream, snapshot, requestCancellation.Token);
+        await ProxyStatusPage.WriteAsync(stream, snapshot, autoRefresh, requestCancellation.Token);
     }
 
-    private bool IsAllowedRequest(byte[] header)
+    private bool TryGetRefreshMode(byte[] header, out bool autoRefresh)
     {
         var lines = Encoding.ASCII.GetString(header).Split("\r\n", StringSplitOptions.None);
 
-        if (!lines[0].Equals("GET /status HTTP/1.1", StringComparison.Ordinal))
+        autoRefresh = lines[0].Equals("GET /status?refresh=10 HTTP/1.1", StringComparison.Ordinal);
+
+        if (!autoRefresh && !lines[0].Equals("GET /status HTTP/1.1", StringComparison.Ordinal))
         {
             return false;
         }
