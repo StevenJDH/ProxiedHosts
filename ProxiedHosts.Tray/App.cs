@@ -53,7 +53,7 @@ public sealed class App : Application
     private NativeMenuItem? _startupItem;
     private NativeMenuItem? _checkUpdatesItem;
     private NativeMenuItem? _previewReleasesItem;
-    private UpdateDialog? _updateDialog;
+    private MessageDialog? _updateDialog;
     private NativeMenuItem? _openHostsItem;
     private NativeMenuItem? _openStatusItem;
     private AboutDialog? _aboutDialog;
@@ -474,6 +474,10 @@ public sealed class App : Application
             return;
         }
 
+        _openStatusItem!.Header = !_startingProxy && string.IsNullOrEmpty(_controller.StatusUrl)
+            ? "⚠ Status dashboard unavailable"
+            : "Open status dashboard";
+
         if (_startingProxy)
         {
             _statusItem!.Header = " ◌ Status: Starting...";
@@ -481,7 +485,7 @@ public sealed class App : Application
             _startProxyItem!.IsVisible = false;
             _mappingsItem!.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
-            _openStatusItem!.IsEnabled = false;
+            _openStatusItem.IsEnabled = false;
             _trayIcon!.ToolTipText = $"{product} - Starting";
 
             return;
@@ -495,7 +499,7 @@ public sealed class App : Application
             _mappingsItem!.Header = ToggleHeader($"Enable mappings ({_controller.MappingCount})", _settings.MappingsActive);
             _mappingsItem.IsEnabled = false;
             _openHostsItem!.IsEnabled = false;
-            _openStatusItem!.IsEnabled = !string.IsNullOrEmpty(_controller.StatusUrl);
+            _openStatusItem.IsEnabled = false;
             _trayIcon!.ToolTipText = $"{product} - Failed";
 
             return;
@@ -510,7 +514,7 @@ public sealed class App : Application
         _mappingsItem!.Header = ToggleHeader($"Enable mappings ({mappingCount})", _controller.IsActive);
         _mappingsItem.IsEnabled = true;
         _openHostsItem!.IsEnabled = true;
-        _openStatusItem!.IsEnabled = !string.IsNullOrEmpty(_controller.StatusUrl);
+        _openStatusItem.IsEnabled = !string.IsNullOrEmpty(_controller.StatusUrl);
         _trayIcon!.ToolTipText = _controller.IsActive ? $"{product} - Active ({mappingCount} mapping{s})" : $"{product} - Inactive";
     }
 
@@ -685,7 +689,7 @@ public sealed class App : Application
             return;
         }
 
-        var dialog = new UpdateDialog(message, onYes);
+        var dialog = new MessageDialog($"{ApplicationMetadata.Instance.Product} - Check for updates", message, onYes);
 
         dialog.Closed += (_, _) =>
         {
@@ -726,13 +730,20 @@ public sealed class App : Application
             _logger.Error($"Failed to open log file: {ex.Message}");
         }
     }
-
+    
     private void OpenProxyStatus()
     {
         var url = _controller?.StatusUrl;
 
         if (string.IsNullOrEmpty(url))
         {
+            _openStatusItem!.Header = "⚠ Status dashboard unavailable";
+            _openStatusItem.IsEnabled = false;
+
+            var dialog = new MessageDialog($"{ApplicationMetadata.Instance.Product} - Status dashboard", "The proxy status dashboard is currently unavailable.");
+
+            dialog.Show();
+            dialog.Activate();
             return;
         }
 
@@ -745,7 +756,7 @@ public sealed class App : Application
             _logger.Error($"Failed to open proxy status dashboard: {ex.Message}");
         }
     }
-
+    
     private void ShowAboutDialog()
     {
         if (_aboutDialog is not null)

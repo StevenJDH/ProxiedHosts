@@ -114,7 +114,7 @@ internal static class Program
                 if (!SystemConsole.IsInputRedirected)
                 {
                     // Handle keyboard input without creating a detached background task.
-                    RunInputLoop(proxyState, configuration.HostsFilePath, statusServer.Url, currentVersion, logger, shutdown, proxyTask);
+                    RunInputLoop(proxyState, configuration.HostsFilePath, statusServer, currentVersion, logger, shutdown, proxyTask);
                 }
                 
                 await proxyTask;
@@ -145,7 +145,7 @@ internal static class Program
         }
     }
 
-    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, string statusUrl, Version currentVersion, IProxyLogger logger, CancellationTokenSource shutdown, Task proxyTask)
+    private static void RunInputLoop(ProxyState proxyState, string hostsFilePath, ProxyStatusServer statusServer, Version currentVersion, IProxyLogger logger, CancellationTokenSource shutdown, Task proxyTask)
     {
         while (!shutdown.IsCancellationRequested && !proxyTask.IsCompleted)
         {
@@ -172,9 +172,21 @@ internal static class Program
                     break;
 
                 case ConsoleKey.S:
-                    TryOpen(() => FileLauncher.OpenUrl(statusUrl), "proxy status dashboard", logger);
-                    break;
+                {
+                    // Allows to capture changes in the url rather than just the initially set one if passed as a string.
+                    string url = statusServer.Url;
 
+                    if (string.IsNullOrEmpty(url))
+                    {
+                        logger.Warning("Proxy status dashboard is unavailable.");
+                    }
+                    else
+                    {
+                        TryOpen(() => FileLauncher.OpenUrl(url), "proxy status dashboard", logger);
+                    }
+
+                    break;
+                }
                 case ConsoleKey.U:
                     _ = CheckForUpdatesAsync(currentVersion, logger, shutdown.Token);
                     break;

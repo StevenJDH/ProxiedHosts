@@ -20,19 +20,20 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using ProxiedHosts.Core.Infrastructure;
 
 namespace ProxiedHosts.Tray.Dialogs;
 
-/// <summary>
-/// Displays update-check results with an acknowledgment button
-/// or an optional confirmation action.
-/// </summary>
-internal sealed class UpdateDialog : Window
+internal sealed class MessageDialog : Window
 {
-    public UpdateDialog(string message, Action? onYes = null)
+    /// <summary>
+    /// Initializes a message dialog with an optional confirmation action.
+    /// </summary>
+    /// <param name="title">The dialog window title.</param>
+    /// <param name="message">The message to display.</param>
+    /// <param name="onYes">An optional action invoked when the user confirms.</param>
+    public MessageDialog(string title, string message, Action? onYes = null)
     {
-        Title = $"{ApplicationMetadata.Instance.Product} - Check for updates";
+        Title = title;
         Width = 440;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;

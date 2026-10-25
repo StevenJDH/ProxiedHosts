@@ -134,6 +134,10 @@ public sealed class ProxyStatusServer : IAsyncDisposable
         {
             _logger.Error($"Proxy status listener failed: {ex.Message}");
         }
+        finally
+        {
+            Port = 0;
+        }
     }
 
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
@@ -324,7 +328,6 @@ public sealed class ProxyStatusServer : IAsyncDisposable
             }
 
             await _shutdown.CancelAsync();
-            _listener.Stop();
 
             foreach (var client in _clients.Keys)
             {
@@ -338,6 +341,7 @@ public sealed class ProxyStatusServer : IAsyncDisposable
         }
         finally
         {
+            _listener.Stop();
             _shutdown?.Dispose();
             _shutdown = null;
             _requestSlots.Dispose();
