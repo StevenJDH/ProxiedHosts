@@ -116,6 +116,7 @@ For `proxiedhosts-tray`, run the executable and right-click the icon in the syst
 ├──────────────────────────────────────┤
 │ Open proxiedhosts.txt                │
 │ Open log                             │
+│ Open status dashboard                │
 ├──────────────────────────────────────┤
 │ Help                               ▸ │   ┌──────────────────────────────────┐
 ├──────────────────────────────────────┤   │ Donate 5€ (PayPal)...            │
@@ -295,6 +296,34 @@ When `--log-diagnostics` is enabled, additional connection diagnostics are recor
 | Bytes transferred            | No   | Yes           | Total successfully forwarded bytes in each direction, helping identify asymmetric or stalled traffic. |
 | Time since last relay write  | No   | Yes           | Time elapsed since data was last successfully forwarded, or an indication that no relay payload was forwarded. |
 | Connection disconnections    | Yes  | Yes           | Records expected I/O, socket, and disposal exceptions, including their type and message, to help diagnose unexpected disconnects. |
+
+## Status dashboard
+
+![Proxy Status Dashboard](screenshots/proxy-status-dashboard.png "Dashboard")
+
+ProxiedHosts includes a local status dashboard for monitoring connection activity and proxy health at a glance. The dashboard can be opened from the tray menu or using the console's S shortcut, with the data updating whenever the page is refreshed.
+
+The dashboard provides the following information:
+
+| Metric           | Meaning |
+|------------------|---------|
+| Active now       | All currently admitted client connections. |
+| Peak concurrent  | Highest simultaneous connection count since the proxy session started. |
+| HTTP             | Active connections classified as ordinary HTTP requests. |
+| HTTPS CONNECT    | Active connections classified as CONNECT requests, including tunnels still being established. |
+| Pending          | Accepted connections not yet successfully classified as HTTP or CONNECT. |
+| Rejected         | Total connections denied because the configured concurrency limit was reached. |
+| Total accepted   | Total client connections admitted since the proxy session started. |
+| Connection limit | Effective maximum concurrent connection limit, including command-line overrides. Displays `Unlimited` when no limit is configured. |
+| Host mappings    | Whether custom hostname mappings are currently enabled or disabled. |
+| Loaded mappings  | Current number of loaded hostname mappings. |
+| Proxy listener   | Whether the normal proxy listener is listening or stopped. |
+
+
+The dashboard runs on a separate HTTP listener bound exclusively to 127.0.0.1, ensuring access independently of the normal proxy's connection limit. Access is read-only and limited to aggregate statistics, without exposing destination hostnames or tunneled traffic.
+
+> [!NOTE]
+> Browsers such as Chrome and Edge normally bypass system proxies automatically for loopback addresses, so no manual proxy exception is usually required. If an application explicitly routes loopback requests through a proxy, configure it to access the dashboard directly. This ensures the dashboard remains accessible even when the normal proxy reaches its connection limit.
 
 ## Limitations
 Below is a list of intentional limitations that may or may not be needed in most or all cases.
