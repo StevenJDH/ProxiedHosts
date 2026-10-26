@@ -161,7 +161,7 @@ public sealed class ProxyConnectionHandler
         connectionActivity.Classify(request.IsConnect);
 
         var route = ResolveRoute(request.Host, request.Port);
-
+        
         if (_enableDiagnostics && request.IsConnect)
         {
             _logger.Debug($"CONNECT #{connectionId} {request.Host}:{request.Port}: requested ({(route.IsMapped ? "mapped" : "DNS")}).");
@@ -174,7 +174,12 @@ public sealed class ProxyConnectionHandler
 
         try
         {
-            await ConnectUpstreamAsync(upstream, request, route, cancellationToken);
+            if (!await ConnectUpstreamAsync(upstream, request, route, (IPEndPoint)client.Client.LocalEndPoint!, cancellationToken))
+            {
+                await ProxyErrorResponse.WriteAsync(clientStream, 403, "Forbidden", "The proxy cannot forward requests to its own listening address.", cancellationToken);
+
+                return;
+            }
         }
         catch (Exception ex) when (ex is SocketException or TimeoutException)
         {
@@ -187,7 +192,7 @@ public sealed class ProxyConnectionHandler
 
             return;
         }
-
+        
         await using var upstreamStream = upstream.GetStream();
         await InitializeRelayAsync(clientStream, upstreamStream, requestHeader, request, connectionId, cancellationToken);
         await RelayBidirectionalAsync(client, upstream, clientStream, upstreamStream, request, connectionId, cancellationToken);
@@ -223,13 +228,27 @@ public sealed class ProxyConnectionHandler
         }
     }
 
-    private async Task ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, CancellationToken cancellationToken)
+    /// <summary>
+    /// Resolves and connects to the upstream destination while preventing connections back to the proxy's own listener.
+    /// </summary>
+    /// <param name="upstream">The TCP client used for the upstream connection.</param>
+    /// <param name="request">The parsed proxy request.</param>
+    /// <param name="route">The resolved mapping or DNS route.</param>
+    /// <param name="listenerEndpoint">The proxy's local listening endpoint.</param>
+    /// <param name="cancellationToken">Cancels the connection attempt.</param>
+    /// <returns>
+    /// <see langword="true"/> if the connection succeeds;
+    /// <see langword="false"/> if the destination points back to the proxy.
+    /// </returns>
+    private async Task<bool> ConnectUpstreamAsync(TcpClient upstream, ProxyRequest request, ConnectionRoute route, IPEndPoint listenerEndpoint, CancellationToken cancellationToken)
     {
         using var connectCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         connectCancellation.CancelAfter(ProxyConfiguration.Instance.ConnectTimeout);
 
         try
         {
+            IPAddress[] addresses;
+
             if (route.IsMapped)
             {
                 if (_logMode is ConnectionLogMode.MappedOnly or ConnectionLogMode.All)
@@ -237,16 +256,27 @@ public sealed class ProxyConnectionHandler
                     _logger.Information($"{request.Method} {request.Host}:{request.Port} -> {route.DestinationAddress}:{route.DestinationPort}");
                 }
 
-                await upstream.ConnectAsync(route.DestinationAddress!, route.DestinationPort, connectCancellation.Token);
-                return;
+                addresses = [route.DestinationAddress!];
             }
-
-            if (_logMode == ConnectionLogMode.All)
+            else
             {
-                _logger.Information($"{request.Method} {request.Host}:{request.Port} -> DNS");
+                if (_logMode == ConnectionLogMode.All)
+                {
+                    _logger.Information($"{request.Method} {request.Host}:{request.Port} -> DNS");
+                }
+
+                addresses = await Dns.GetHostAddressesAsync(request.Host, connectCancellation.Token);
             }
 
-            await upstream.ConnectAsync(request.Host, request.Port, connectCancellation.Token);
+            // Reject any destination that could connect back to this listener.
+            if (route.DestinationPort == listenerEndpoint.Port && addresses.Contains(listenerEndpoint.Address))
+            {
+                return false;
+            }
+
+            await upstream.ConnectAsync(addresses, route.DestinationPort, connectCancellation.Token);
+
+            return true;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
