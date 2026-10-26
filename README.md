@@ -57,6 +57,29 @@ ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hos
       Kubuntu Desktop Environment.
     </td>
     <td align="center">
+      <img src="screenshots/terminal-macos.png" width="260"
+        title="macOS Terminal" alt="macOS Terminal"
+      /><br>
+      <b>macOS Terminal</b><br>
+      Universal binary support.
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="screenshots/tray-macos.png" width="260"
+        title="macOS Menu Bar" alt="macOS Menu Bar"
+      /><br>
+      <b>macOS Menu Bar</b><br>
+      Native look & feel.
+    </td>
+    <td align="center">
+      <img src="screenshots/proxy-status-dashboard.png" width="260"
+        title="Status Dashboard" alt="Status Dashboard"
+      /><br>
+      <b>Status Dashboard</b><br>
+      Proxy activity monitoring.
+    </td>
+    <td align="center">
       <a href="./screenshots/">More...</a>
     </td>
   </tr>
@@ -108,9 +131,9 @@ For `proxiedhosts-tray`, run the executable and right-click the icon in the syst
 
 ```text
 ┌──────────────────────────────────────┐
-│ Status: Active                       │
-│ Proxy: http://127.0.0.1:12345        │
-│ Open proxy settings...               │
+│ ● Status: Active                     │
+│ ↔ Proxy: http://127.0.0.1:12345      │
+│ ⚙ Open proxy settings...            │
 ├──────────────────────────────────────┤
 │ ☑ Enable mappings (5)               │
 │ ☑ Start at login                    │
