@@ -174,6 +174,15 @@ public static class FileLauncher
             {
                 throw new PlatformNotSupportedException($"Opening proxy settings is not supported for desktop '{desktop}'.");
             }
+
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+
+            var linuxProcess = Process.Start(startInfo) ?? throw new InvalidOperationException("Unable to open system proxy settings.");
+
+            _ = DrainDesktopOutputAsync(linuxProcess);
+
+            return;
         }
         else
         {
@@ -185,6 +194,35 @@ public static class FileLauncher
         if (process is null && !startInfo.UseShellExecute)
         {
             throw new InvalidOperationException("Unable to open system proxy settings.");
+        }
+    }
+
+    /// <summary>
+    /// Asynchronously drains and discards a desktop process's standard output
+    /// and error streams, suppressing diagnostic messages in the console.
+    /// </summary>
+    /// <remarks>
+    /// Both redirected streams must be consumed concurrently to prevent the
+    /// child process from blocking when either output buffer becomes full.
+    /// Simply redirecting a stream without reading it can cause a deadlock.
+    /// See <see href="https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.processstartinfo.redirectstandarderror?view=net-10.0">
+    /// Microsoft's redirected process output documentation</see>.
+    /// The process is disposed after its output has been drained.
+    /// </remarks>
+    /// <param name="process">The launched desktop process to drain and dispose.</param>
+    private static async Task DrainDesktopOutputAsync(Process process)
+    {
+        using (process)
+        {
+            try
+            {
+                await Task.WhenAll(process.StandardOutput.BaseStream.CopyToAsync(Stream.Null), process.StandardError.BaseStream.CopyToAsync(Stream.Null));
+                await process.WaitForExitAsync();
+            }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
+            {
+                // The settings process may exit while its output is being drained.
+            }
         }
     }
 }
