@@ -99,7 +99,7 @@ internal static class Program
             SystemConsole.WriteLine("U = check for updates");
             SystemConsole.WriteLine($"A = about {product}");
             SystemConsole.WriteLine("D = donate 5€ (PayPal)...");
-            SystemConsole.WriteLine("Q / Ctrl+C = quit");
+            SystemConsole.WriteLine($"Q / {(OperatingSystem.IsMacOS() ? "⌃C" : "Ctrl+C")} = quit");
             SystemConsole.WriteLine();
 
             // Check for updates after displaying the startup information,
