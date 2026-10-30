@@ -197,8 +197,19 @@ internal static class ProxyErrorResponse
                  """;
 
         var body = Encoding.UTF8.GetBytes(html);
-        var header = Encoding.ASCII.GetBytes(
-            $"HTTP/1.1 {statusCode} {reason}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {body.Length}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n");
+
+        var headerBuilder = new StringBuilder()
+            .Append($"HTTP/1.1 {statusCode} {reason}\r\n")
+            .Append("Content-Type: text/html; charset=utf-8\r\n")
+            .Append($"Content-Length: {body.Length}\r\n")
+            .Append("Cache-Control: no-store\r\n")
+            .Append("X-Content-Type-Options: nosniff\r\n")
+            .Append("X-Frame-Options: DENY\r\n")
+            .Append("Referrer-Policy: no-referrer\r\n")
+            .Append("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n")
+            .Append("Connection: close\r\n\r\n");
+
+        var header = Encoding.ASCII.GetBytes(headerBuilder.ToString());
 
         await stream.WriteAsync(header, cancellationToken);
         await stream.WriteAsync(body, cancellationToken);

@@ -43,7 +43,7 @@ internal static class ProxyStatusPage
     {
         var body = Encoding.UTF8.GetBytes(RenderHtml(snapshot, autoRefresh));
 
-        var sb = new StringBuilder()
+        var headerBuilder = new StringBuilder()
             .Append("HTTP/1.1 200 OK\r\n")
             .Append("Content-Type: text/html; charset=utf-8\r\n")
             .Append($"Content-Length: {body.Length}\r\n")
@@ -55,7 +55,7 @@ internal static class ProxyStatusPage
             .Append($"Content-Security-Policy: default-src 'none'; script-src 'sha256-{AutoRefreshScriptHash}'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n")
             .Append("Connection: close\r\n\r\n");
 
-        var headers = Encoding.ASCII.GetBytes(sb.ToString());
+        var headers = Encoding.ASCII.GetBytes(headerBuilder.ToString());
 
         await stream.WriteAsync(headers, cancellationToken);
         await stream.WriteAsync(body, cancellationToken);
