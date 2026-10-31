@@ -18,22 +18,32 @@
  */
 
 using System.Reflection;
+using System.Text.RegularExpressions;
 
 namespace ProxiedHosts.Core.Infrastructure;
 
 /// <summary>
 /// Provides metadata from the application's entry assembly.
 /// </summary>
-public sealed class ApplicationMetadata
+public sealed partial class ApplicationMetadata
 {
     public static ApplicationMetadata Instance { get; } = new();
 
     public string Product { get; }
+
     public Version Version { get; }
+
     public string Authors { get; }
+
+    [GeneratedRegex(@"(?<start>[0-9]{4})(?:-[0-9]{4})?$", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex CopyrightYearRegex { get; }
+
     public string Copyright { get; }
+
     public string RepositoryUrl { get; }
+
     public string DonationUrl { get; }
+
     public string FixedDonationUrl { get; }
 
     private ApplicationMetadata()
@@ -42,8 +52,19 @@ public sealed class ApplicationMetadata
 
         Product = assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "ProxiedHosts";
         Version = assembly.GetName().Version ?? throw new InvalidOperationException("Could not determine the installed version.");
-        Copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? string.Empty;
+        
+        string copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright ?? string.Empty;
+        int currentYear = DateTime.Now.Year;
 
+        Copyright = CopyrightYearRegex.Replace(copyright, match =>
+        {
+            int lastYear = int.Parse(match.Value[^4..]);
+
+            return currentYear > lastYear
+                ? $"{match.Groups["start"].Value}-{currentYear}"
+                : match.Value;
+        });
+        
         var attributes = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().ToArray();
 
         Authors = GetMetadata(attributes, "Authors");
