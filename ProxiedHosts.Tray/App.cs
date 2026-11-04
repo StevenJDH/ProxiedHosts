@@ -45,6 +45,8 @@ public sealed class App : Application
     private static readonly TimeSpan StartRetryDelay = TimeSpan.FromSeconds(2);
     private readonly CancellationTokenSource _lifetimeCancellation = new();
 
+    private static readonly string Padding = OperatingSystem.IsWindows() ? " " : "";
+
     private TrayIcon? _trayIcon;
     private NativeMenuItem? _statusItem;
     private NativeMenuItem? _proxyItem;
@@ -117,7 +119,7 @@ public sealed class App : Application
     {
         var product = ApplicationMetadata.Instance.Product;
 
-        _statusItem = new NativeMenuItem(" ◌ Status: Starting...")
+        _statusItem = new NativeMenuItem($"{Padding}◌ Status: Starting...")
         {
             IsEnabled = false
         };
@@ -480,7 +482,7 @@ public sealed class App : Application
 
         if (_startingProxy)
         {
-            _statusItem!.Header = " ◌ Status: Starting...";
+            _statusItem!.Header = $"{Padding}◌ Status: Starting...";
             _proxyItem!.Header = "↔ Proxy: Starting...";
             _startProxyItem!.IsVisible = false;
             _mappingsItem!.IsEnabled = false;
@@ -508,7 +510,7 @@ public sealed class App : Application
         var mappingCount = _controller.MappingCount;
         var s = mappingCount > 1 ? "s" : "";
 
-        _statusItem!.Header = _controller.IsActive ? " ● Status: Active" : " ○ Status: Inactive";
+        _statusItem!.Header = _controller.IsActive ? $"{Padding}● Status: Active" : $"{Padding}○ Status: Inactive";
         _proxyItem!.Header = $"↔ Proxy: {_controller.ProxyAddress}";
         _startProxyItem!.IsVisible = false;
         _mappingsItem!.Header = ToggleHeader($"Enable mappings ({mappingCount})", _controller.IsActive);
