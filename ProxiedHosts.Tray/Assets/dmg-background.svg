@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="380" viewBox="0 0 660 380">
+  <defs>
+    <linearGradient id="background" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f7fbff" />
+      <stop offset="1" stop-color="#e4f2fa" />
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#75abc0" />
+      <stop offset="1" stop-color="#24708a" />
+    </linearGradient>
+  </defs>
+
+  <rect width="660" height="380" fill="url(#background)" />
+  <circle cx="34" cy="350" r="153" fill="#d2eaf4" opacity="0.48" />
+  <circle cx="654" cy="12" r="120" fill="#cbe4f0" opacity="0.36" />
+  <path d="M0 111 H660" stroke="#cbdfe9" stroke-width="1" opacity="0.75" />
+
+  <text x="330" y="54" fill="#22485c" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="25" font-weight="700" text-anchor="middle">ProxiedHosts</text>
+  <text x="330" y="83" fill="#527386" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="15" text-anchor="middle">Drag the app to Applications to install</text>
+
+  <!-- The app and Applications icons are positioned by create-dmg on either side. -->
+  <path d="M277 213 C308 203 347 203 390 213"
+        fill="none" stroke="url(#arrow)" stroke-width="14" stroke-linecap="round" />
+  <path d="M374 188 L405 213 L374 238"
+        fill="none" stroke="#24708a" stroke-width="14"
+        stroke-linecap="round" stroke-linejoin="round" />
+
+  <text x="330" y="350" fill="#668395" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="12" text-anchor="middle">After installation, eject this disk image.</text>
+</svg>

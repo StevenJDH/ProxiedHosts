@@ -817,8 +817,12 @@ jobs:
             "${APP_BUNDLE}"
 
       # ----------------------------------------------------------
-      # Package the .app for GitHub Releases.
+      # Package the .app as a DMG for GitHub Releases.
       # ----------------------------------------------------------
+      - name: Install DMG packaging tools
+        shell: bash
+        run: brew install create-dmg librsvg
+
       - name: Create macOS Tray release package
         shell: bash
         run: |
@@ -827,18 +831,32 @@ jobs:
           mkdir -p release-assets
 
           APP_BUNDLE="bundle/${MACOS_APP_NAME}.app"
-          ARCHIVE="release-assets/proxiedhosts-tray-${{ needs.prepare.outputs.version }}-macos-universal.zip"
+          DMG_SOURCE="bundle/dmg-source"
+          DMG_BACKGROUND="bundle/dmg-background.png"
+          DMG_FILE="release-assets/proxiedhosts-tray-${{ needs.prepare.outputs.version }}-macos-universal.dmg"
 
-          ditto \
-            -c \
-            -k \
-            --sequesterRsrc \
-            --keepParent \
-            "${APP_BUNDLE}" \
-            "${ARCHIVE}"
+          mkdir -p "${DMG_SOURCE}"
+          ditto "${APP_BUNDLE}" "${DMG_SOURCE}/${MACOS_APP_NAME}.app"
+          rsvg-convert --width 660 --height 380 \
+            --output "${DMG_BACKGROUND}" \
+            "ProxiedHosts.Tray/Assets/dmg-background.svg"
+
+          create-dmg \
+            --volname "ProxiedHosts" \
+            --volicon "${MACOS_ICON_FILE}" \
+            --background "${DMG_BACKGROUND}" \
+            --window-pos 200 120 \
+            --window-size 660 380 \
+            --icon-size 112 \
+            --icon "${MACOS_APP_NAME}.app" 170 215 \
+            --hide-extension "${MACOS_APP_NAME}.app" \
+            --app-drop-link 490 215 \
+            --no-internet-enable \
+            "${DMG_FILE}" "${DMG_SOURCE}"
+          test -s "${DMG_FILE}"
 
           echo "Created:"
-          ls -lh "${ARCHIVE}"
+          ls -lh "${DMG_FILE}"
 
       - name: Upload macOS Tray release package
         uses: actions/upload-artifact@v7
