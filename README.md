@@ -15,67 +15,67 @@
 ![Maintenance](https://img.shields.io/badge/yes-4FCA21?label=maintained&style=flat)
 ![GitHub](https://img.shields.io/github/license/StevenJDH/ProxiedHosts)
 
-ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hostname-to-IP mappings without modifying the system hosts file. Mappings are loaded from a simple `proxiedhosts.txt` file that can be changed without administrator privileges. HTTP traffic is forwarded using the configured hostname mappings, while HTTPS connections are tunneled using the standard CONNECT method without decrypting TLS traffic. A stable local proxy port is generated and persisted between application launches for predictable client configuration. The proxy is designed primarily for local development, testing, and environments where editing the operating system hosts file is inconvenient or restricted.
+ProxiedHosts is a lightweight local HTTP and HTTPS proxy for applying custom hostname-to-IP mappings without modifying the system `hosts` file. Mappings are loaded from a simple `proxiedhosts.txt` file that can be changed without administrator privileges. HTTP traffic is forwarded using the configured hostname mappings, while HTTPS connections are tunneled using the standard CONNECT method without decrypting TLS traffic. A stable local proxy port is generated and persisted between application launches for predictable client configuration. The proxy is designed primarily for local development, testing, and environments where editing the operating system `hosts` file is inconvenient or restricted.
 
 <table>
   <tr>
     <td align="center">
-      <img src="screenshots/console-windows.png" width="260"
-        title="Console App" alt="Console App"
-      /><br>
+      <a href="screenshots/console-windows.png?raw=1" title="Ctrl/Cmd + Click to open in a new tab.">
+        <img src="screenshots/console-windows.png" width="260" alt="Console App"/>
+      </a><br>
       <b>Console App</b><br>
       Console proxy manager.
     </td>
     <td align="center">
-      <img src="screenshots/tray-windows.png" width="260"
-        title="Tray App" alt="Tray App"
-      /><br>
+      <a href="screenshots/tray-windows.png?raw=1" title="Ctrl/Cmd + Click to open in a new tab.">
+        <img src="screenshots/tray-windows.png" width="260" alt="Tray App"/>
+      </a><br>
       <b>Tray App</b><br>
       Desktop proxy manager.
     </td>
     <td align="center">
-      <img src="screenshots/html-error-message.png" width="260"
-        title="HTML Errors" alt="HTML Errors"
-      /><br>
+      <a href="screenshots/html-error-message.png?raw=1" title="Ctrl/Cmd + Click to open in a new tab.">
+        <img src="screenshots/html-error-message.png" width="260" alt="HTML Errors"/>
+      </a><br>
       <b>HTML Errors</b><br>
       HTTP proxy errors.
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="screenshots/tray-linux-gnome.png" width="260"
-        title="GNOME Desktop" alt="GNOME Desktop"
-      /><br>
+      <a href="screenshots/tray-linux-gnome.png?raw=1" title="Ctrl/Cmd + Click to open in a new tab.">
+        <img src="screenshots/tray-linux-gnome.png" width="260" alt="GNOME Desktop"/>
+      </a><br>
       <b>GNOME Desktop</b><br>
       Ubuntu Desktop Environment.
     </td>
     <td align="center">
-      <img src="screenshots/tray-linux-kde.png" width="260"
-        title="KDE Plasma" alt="KDE Plasma"
-      /><br>
+      <a href="screenshots/tray-linux-kde.png?raw=1" title="Ctrl/Cmd + Click to open in a new tab.">
+        <img src="screenshots/tray-linux-kde.png" width="260" alt="KDE Plasma"/>
+      </a><br>
       <b>KDE Plasma</b><br>
       Kubuntu Desktop Environment.
     </td>
     <td align="center">
-      <img src="screenshots/terminal-macos.png" width="260"
-        title="macOS Terminal" alt="macOS Terminal"
-      /><br>
+      <a href="screenshots/terminal-macos.png?raw=1" title="Ctrl/Cmd + Click to open in a new tab.">
+        <img src="screenshots/terminal-macos.png" width="260" alt="macOS Terminal"/>
+      </a><br>
       <b>macOS Terminal</b><br>
       Universal binary support.
     </td>
   </tr>
   <tr>
     <td align="center">
-      <img src="screenshots/tray-macos.png" width="260"
-        title="macOS Menu Bar" alt="macOS Menu Bar"
-      /><br>
+      <a href="screenshots/tray-macos.png?raw=1" title="Ctrl/Cmd + Click to open in a new tab.">
+        <img src="screenshots/tray-macos.png" width="260" alt="macOS Menu Bar"/>
+      </a><br>
       <b>macOS Menu Bar</b><br>
       Native look & feel.
     </td>
     <td align="center">
-      <img src="screenshots/proxy-status-dashboard.png" width="260"
-        title="Status Dashboard" alt="Status Dashboard"
-      /><br>
+      <a href="screenshots/proxy-status-dashboard.png?raw=1" title="Ctrl/Cmd + Click to open in a new tab.">
+        <img src="screenshots/proxy-status-dashboard.png" width="260" alt="Status Dashboard"/>
+      </a><br>
       <b>Status Dashboard</b><br>
       Proxy activity monitoring.
     </td>
@@ -175,7 +175,7 @@ To test the proxy for a couple of features, add `127.0.0.1 example.com` to the p
 # The empty '--noproxy' value guarantees curl won't bypass the proxy because of `NO_PROXY` and `no_proxy`environment variables.
 curl http://example.com \
     --noproxy "" \
-    --proxy http://127.0.0.1:12345  \
+    --proxy http://127.0.0.1:<YOUR_PORT>  \
     -H "Connection: keep-alive" \
     -H "Proxy-Connection: keep-alive" \
     -v
@@ -323,7 +323,7 @@ When `--log-diagnostics` is enabled, additional connection diagnostics are recor
 
 ## Status dashboard
 
-![Proxy Status Dashboard](screenshots/proxy-status-dashboard.png "Dashboard")
+![Proxy Status Dashboard](screenshots/proxy-status-dashboard.png?raw=1 "Dashboard")
 
 ProxiedHosts includes a local status dashboard for monitoring connection activity and proxy health at a glance. The dashboard can be opened from the tray menu or using the console's S shortcut, with the data updating whenever the page is refreshed.
 
