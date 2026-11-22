@@ -752,7 +752,8 @@ jobs:
 
           mkdir -p "${DMG_SOURCE}"
           ditto "${APP_BUNDLE}" "${DMG_SOURCE}/${MACOS_APP_NAME}.app"
-          rsvg-convert --width 660 --height 380 \
+          # Leave additional vertical room for Finder chrome so the footer stays visible.
+          rsvg-convert --width 660 --height 430 \
             --output "${DMG_BACKGROUND}" \
             "ProxiedHosts.Tray/Assets/dmg-background.svg"
 
@@ -761,7 +762,7 @@ jobs:
             --volicon "${MACOS_ICON_FILE}" \
             --background "${DMG_BACKGROUND}" \
             --window-pos 200 120 \
-            --window-size 660 380 \
+            --window-size 660 430 \
             --icon-size 112 \
             --icon "${MACOS_APP_NAME}.app" 170 215 \
             --hide-extension "${MACOS_APP_NAME}.app" \
