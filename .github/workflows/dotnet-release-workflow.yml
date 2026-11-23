@@ -259,10 +259,20 @@ jobs:
           [[ -f README.md ]] && cp README.md bundle/
           [[ -f LICENSE ]] && cp LICENSE bundle/
 
-          tar \
-            -C bundle \
-            -czf "release-assets/proxiedhosts-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.tar.gz" \
-            .
+          # Archive root contents directly (including dotfiles), without ./ prefixes.
+          archive="release-assets/proxiedhosts-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.tar.gz"
+          (
+            cd bundle
+            shopt -s dotglob nullglob
+            entries=( * )
+
+            if (( ${#entries[@]} == 0 )); then
+              echo "::error::Empty Linux Console bundle."
+              exit 1
+            fi
+
+            tar -czf "../${archive}" -- "${entries[@]}"
+          )
 
       - name: Upload release package
         uses: actions/upload-artifact@v7
@@ -406,10 +416,20 @@ jobs:
           [[ -f README.md ]] && cp README.md bundle-tray/
           [[ -f LICENSE ]] && cp LICENSE bundle-tray/
 
-          tar \
-            -C bundle-tray \
-            -czf "release-assets/proxiedhosts-tray-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.tar.gz" \
-            .
+          # Archive root contents directly (including dotfiles), without ./ prefixes.
+          archive="release-assets/proxiedhosts-tray-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.tar.gz"
+          (
+            cd bundle-tray
+            shopt -s dotglob nullglob
+            entries=( * )
+
+            if (( ${#entries[@]} == 0 )); then
+              echo "::error::Empty Linux Tray bundle."
+              exit 1
+            fi
+
+            tar -czf "../${archive}" -- "${entries[@]}"
+          )
 
       - name: Upload Tray release package
         uses: actions/upload-artifact@v7
@@ -506,10 +526,20 @@ jobs:
           [[ -f README.md ]] && cp README.md bundle/
           [[ -f LICENSE ]] && cp LICENSE bundle/
 
-          tar \
-            -C bundle \
-            -czf "release-assets/proxiedhosts-${{ needs.prepare.outputs.version }}-macos-universal.tar.gz" \
-            .
+          # Archive root contents directly (including dotfiles), without ./ prefixes.
+          archive="release-assets/proxiedhosts-${{ needs.prepare.outputs.version }}-macos-universal.tar.gz"
+          (
+            cd bundle
+            shopt -s dotglob nullglob
+            entries=( * )
+
+            if (( ${#entries[@]} == 0 )); then
+              echo "::error::Empty macOS Console bundle."
+              exit 1
+            fi
+
+            tar -czf "../${archive}" -- "${entries[@]}"
+          )
 
       - name: Upload macOS release package
         uses: actions/upload-artifact@v7
@@ -607,6 +637,9 @@ jobs:
           cp \
             "${MACOS_ICON_FILE}" \
             "${RESOURCES_DIR}/ProxiedHosts.icns"
+
+          # Include the ProxiedHosts license in the application bundle.
+          [[ -f LICENSE ]] && cp LICENSE "${RESOURCES_DIR}/LICENSE"
 
           # Your release version is 1.0.0.26101.
           # macOS marketing version is the three-part 1.0.0.
