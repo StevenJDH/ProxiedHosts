@@ -10,5 +10,9 @@
 		<!-- Excludes *.pdb files from the publish directory so they don't end up in the final packaging. -->
 		<CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
 	</PropertyGroup>
+	
+	<ItemGroup>
+		<EmbeddedResource Include="../ProxiedHosts.Tray/Assets/ProxiedHostsAbout.png" LogicalName="ProxiedHosts.Core.WebIcon.png" />
+	</ItemGroup>
 
 </Project>

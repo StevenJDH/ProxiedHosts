@@ -52,7 +52,7 @@ internal static class ProxyStatusPage
             .Append("X-Frame-Options: DENY\r\n")
             .Append("Referrer-Policy: no-referrer\r\n")
             .Append("Cross-Origin-Resource-Policy: same-origin\r\n")
-            .Append($"Content-Security-Policy: default-src 'none'; script-src 'sha256-{AutoRefreshScriptHash}'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n")
+            .Append($"Content-Security-Policy: default-src 'none'; img-src data:; script-src 'sha256-{AutoRefreshScriptHash}'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n")
             .Append("Connection: close\r\n\r\n");
 
         var headers = Encoding.ASCII.GetBytes(headerBuilder.ToString());
@@ -129,11 +129,13 @@ internal static class ProxyStatusPage
                           }
                           main { width: min(100%, 960px); margin: 0 auto; }
                           .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 22px; }
-                          .brand { display: flex; gap: 15px; align-items: center; }
+                          .brand { display: flex; gap: 8px; align-items: center; }
                           .mark {
-                              width: 50px; height: 50px; display: grid; place-items: center;
-                              border-radius: 14px; font-weight: 850; font-size: 27px;
-                              background: linear-gradient(135deg, #49d6c4, #448ee5); color: #091c29;
+                              width: 80px;
+                              height: 50px;
+                              object-fit: cover;
+                              flex-shrink: 0;
+                              margin-left: -8px;
                           }
                           .name { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 25px; font-weight: 750; letter-spacing: -.5px; }
                           .version { padding: 4px 9px; border-radius: 20px; background: #203c45; color: var(--teal); font-size: 11px; font-weight: 700; letter-spacing: 0; }
@@ -179,7 +181,7 @@ internal static class ProxyStatusPage
                   <main>
                       <header class="header">
                           <div class="brand">
-                              <div class="mark" aria-hidden="true">P</div>
+                              <img class="mark" src="{{WebIcon.DataUri}}" alt="">
                               <div>
                                   <div class="name">{{appName}} <span class="version">v{{version}}</span></div>
                                   <div class="eyebrow">LOCAL PROXY STATUS</div>

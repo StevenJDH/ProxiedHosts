@@ -85,21 +85,17 @@ internal static class ProxyErrorResponse
                              display: flex;
                              align-items: center;
                              flex-wrap: wrap;
-                             gap: 12px;
+                             gap: 5px;
                              font-size: 18px;
                              font-weight: 700;
                          }
 
                          .mark {
-                             display: grid;
-                             place-items: center;
-                             width: 42px;
+                             width: 64px;
                              height: 42px;
-                             border-radius: 12px;
-                             background: linear-gradient(135deg, #49d6c4, #448ee5);
-                             color: #091c29;
-                             font-size: 23px;
-                             font-weight: 800;
+                             object-fit: cover;
+                             flex-shrink: 0;
+                             margin-left: -8px;
                          }
 
                          .tag {
@@ -172,7 +168,7 @@ internal static class ProxyErrorResponse
                  <body>
                      <main class="card">
                          <header class="brand">
-                             <span class="mark">P</span>
+                             <img class="mark" src="{{WebIcon.DataUri}}" alt="">
                              <span>{{appName}}</span>
                              <span class="tag">LOCAL PROXY</span>
                          </header>
@@ -206,7 +202,7 @@ internal static class ProxyErrorResponse
             .Append("X-Content-Type-Options: nosniff\r\n")
             .Append("X-Frame-Options: DENY\r\n")
             .Append("Referrer-Policy: no-referrer\r\n")
-            .Append("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n")
+            .Append("Content-Security-Policy: default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'\r\n")
             .Append("Connection: close\r\n\r\n");
 
         var header = Encoding.ASCII.GetBytes(headerBuilder.ToString());
